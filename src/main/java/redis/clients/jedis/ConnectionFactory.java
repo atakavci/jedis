@@ -1,5 +1,12 @@
 package redis.clients.jedis;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.PooledObjectFactory;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
@@ -52,6 +59,7 @@ public class ConnectionFactory implements PooledObjectFactory<Connection> {
     final Connection jedis = pooledConnection.getObject();
     if (jedis.isConnected()) {
       try {
+        pooledConnections.remove(jedis);
         jedis.close();
       } catch (RuntimeException e) {
         logger.debug("Error while close", e);
@@ -63,7 +71,9 @@ public class ConnectionFactory implements PooledObjectFactory<Connection> {
   public PooledObject<Connection> makeObject() throws Exception {
     try {
       Connection jedis = new Connection(jedisSocketFactory, clientConfig, clientSideCache);
-      return new DefaultPooledObject<>(jedis);
+      DefaultPooledObject pooled = new DefaultPooledObject<>(jedis);
+      pooledConnections.put(jedis, pooled);
+      return pooled;
     } catch (JedisException je) {
       logger.debug("Error while makeObject", je);
       throw je;
@@ -86,4 +96,24 @@ public class ConnectionFactory implements PooledObjectFactory<Connection> {
       return false;
     }
   }
+
+  public static Map<Connection, PooledObject> pooledConnections = new HashMap<Connection, PooledObject>();
+
+  private static Future executor = start();
+
+  private static Future start() {
+    ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    return scheduler.scheduleAtFixedRate(() -> consume(), 3, 5, TimeUnit.SECONDS);
+  }
+
+  public static void consume() {
+    for (Connection conn : pooledConnections.keySet()) {
+      try {
+        conn.readInvalidationsWithCheckingBroken();
+      } catch (Exception e) {
+        System.out.println(e.toString());
+      }
+    }
+  }
+
 }

@@ -352,7 +352,7 @@ public class Connection implements Closeable {
     }
   }
 
-  protected Object readProtocolWithCheckingBroken() {
+  protected synchronized Object readProtocolWithCheckingBroken() {
     if (broken) {
       throw new JedisConnectionException("Attempting to read from a broken connection");
     }
@@ -538,6 +538,19 @@ public class Connection implements Closeable {
       if (!"OK".equals(reply)) {
         throw new JedisException("Could not enable client tracking. Reply: " + reply);
       }
+    }
+  }
+
+  public synchronized void readInvalidationsWithCheckingBroken() {
+    if (broken) {
+      throw new JedisConnectionException("Attempting to read from a broken connection");
+    }
+
+    try {
+      Protocol.readPushes(inputStream, clientSideCache);
+    } catch (JedisConnectionException exc) {
+      broken = true;
+      throw exc;
     }
   }
 }

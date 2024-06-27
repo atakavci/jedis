@@ -214,11 +214,11 @@ public final class Protocol {
 
   @Experimental
   public static Object read(final RedisInputStream is, final ClientSideCache cache) {
-    readPushes(is, cache);
+    // readPushes(is, cache);
     return process(is);
   }
 
-  private static void readPushes(final RedisInputStream is, final ClientSideCache cache) {
+  public static void readPushes(final RedisInputStream is, final ClientSideCache cache) {
     if (cache != null) {
       while (is.peek(GREATER_THAN_BYTE)) {
         is.readByte();

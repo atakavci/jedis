@@ -76,6 +76,7 @@ public abstract class ClientSideCache {
 //    final ByteBuffer mapKey = makeKeyForKeyToCommandHashes((byte[]) key);
     final ByteBuffer mapKey = makeKeyForKeyToCommandHashes(key);
 
+    System.out.println("invalidation message for:" + key);
     Set<Long> hashes = keyToCommandHashes.get(mapKey);
     if (hashes != null) {
       invalidateHashes(hashes);
