@@ -107,9 +107,13 @@ public class ConnectionFactory implements PooledObjectFactory<Connection> {
   }
 
   public static void consume() {
+    int connOrder = 0;
     for (Connection conn : pooledConnections.keySet()) {
       try {
-        conn.readInvalidationsWithCheckingBroken();
+        System.out.println("trying for order" + (++connOrder) + " with conn hashcode" + conn.hashCode());
+        if (conn.isConnected()) {
+          conn.readInvalidationsWithCheckingBroken();
+        }
       } catch (Exception e) {
         System.out.println(e.toString());
       }

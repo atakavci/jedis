@@ -259,4 +259,14 @@ public class RedisInputStream extends FilterInputStream {
       }
     }
   }
+
+  public boolean checkDataAvailable() {
+    try {
+      int count = in.available();
+      System.out.println(Thread.currentThread().getId() + " available " + count + " ris hashcode " + this.hashCode());
+      return count > 0;
+    } catch (IOException e) {
+      return false;
+    }
+  }
 }

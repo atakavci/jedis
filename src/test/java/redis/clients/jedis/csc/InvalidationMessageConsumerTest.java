@@ -19,8 +19,13 @@ public class InvalidationMessageConsumerTest {
     JedisPool pool = new JedisPool("localhost", 6379);
     HostAndPort hnp = HostAndPort.from("localhost:6379");
     JedisClientConfig config = DefaultJedisClientConfig.builder().protocol(RedisProtocol.RESP3).build();
+    
     try (JedisPooled jedis = new JedisPooled(hnp, config, clientSideCache)) {
-      jedis.hset("mykey", "field1", "value1");
+      for (int i = 0; i < 50; i++) {
+        String field = "field" + i;
+        String value = "value" + i;
+        jedis.hset("mykey", field, value);
+      }
     }
 
     JedisPooled jedis1 = new JedisPooled(hnp, config, clientSideCache);
@@ -30,7 +35,7 @@ public class InvalidationMessageConsumerTest {
     jedis2.hset("mykey", "field2", "value2");
 
     try {
-      Thread.currentThread().sleep(30000);
+      Thread.currentThread().sleep(15000);
       System.out.println("");
     } catch (InterruptedException e) {
       // TODO Auto-generated catch block

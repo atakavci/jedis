@@ -220,7 +220,7 @@ public final class Protocol {
 
   public static void readPushes(final RedisInputStream is, final ClientSideCache cache) {
     if (cache != null) {
-      while (is.peek(GREATER_THAN_BYTE)) {
+      while (is.checkDataAvailable() && is.peek(GREATER_THAN_BYTE)) {
         is.readByte();
         processPush(is, cache);
       }
