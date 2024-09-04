@@ -21,10 +21,10 @@ public final class HostAndPorts {
     }
 
     sentinelHostAndPortList.add(new HostAndPort("3.255.91.17", 8001));
-    sentinelHostAndPortList.add(new HostAndPort("localhost", 12000));
-    sentinelHostAndPortList.add(new HostAndPort("54.74.152.148", 12000));
-    sentinelHostAndPortList.add(new HostAndPort("localhost", 12000));
-    sentinelHostAndPortList.add(new HostAndPort("localhost", 12000 ));
+    sentinelHostAndPortList.add(new HostAndPort("3.255.91.17", 8001));
+    sentinelHostAndPortList.add(new HostAndPort("54.74.152.148", 8001));
+    sentinelHostAndPortList.add(new HostAndPort("54.74.152.148", 8001));
+    sentinelHostAndPortList.add(new HostAndPort("3.255.91.17", 8001 ));
 
     clusterHostAndPortList.add(new HostAndPort("localhost", 7379));
     clusterHostAndPortList.add(new HostAndPort("localhost", 7380));
