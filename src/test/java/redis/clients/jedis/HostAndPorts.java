@@ -20,11 +20,11 @@ public final class HostAndPorts {
       throw new RuntimeException(e);
     }
 
-    sentinelHostAndPortList.add(new HostAndPort("localhost", Protocol.DEFAULT_SENTINEL_PORT));
-    sentinelHostAndPortList.add(new HostAndPort("localhost", Protocol.DEFAULT_SENTINEL_PORT + 1));
-    sentinelHostAndPortList.add(new HostAndPort("localhost", Protocol.DEFAULT_SENTINEL_PORT + 2));
-    sentinelHostAndPortList.add(new HostAndPort("localhost", Protocol.DEFAULT_SENTINEL_PORT + 3));
-    sentinelHostAndPortList.add(new HostAndPort("localhost", Protocol.DEFAULT_SENTINEL_PORT + 4));
+    sentinelHostAndPortList.add(new HostAndPort("3.255.91.17", 8001));
+    sentinelHostAndPortList.add(new HostAndPort("localhost", 12000));
+    sentinelHostAndPortList.add(new HostAndPort("54.74.152.148", 12000));
+    sentinelHostAndPortList.add(new HostAndPort("localhost", 12000));
+    sentinelHostAndPortList.add(new HostAndPort("localhost", 12000 ));
 
     clusterHostAndPortList.add(new HostAndPort("localhost", 7379));
     clusterHostAndPortList.add(new HostAndPort("localhost", 7380));

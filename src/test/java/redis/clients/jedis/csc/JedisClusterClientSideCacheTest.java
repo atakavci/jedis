@@ -19,7 +19,7 @@ public class JedisClusterClientSideCacheTest extends UnifiedJedisClientSideCache
   private static final Set<HostAndPort> hnp = new HashSet<>(HostAndPorts.getStableClusterServers());
 
   private static final Supplier<JedisClientConfig> clientConfig
-      = () -> DefaultJedisClientConfig.builder().resp3().password("cluster").build();
+      = () -> DefaultJedisClientConfig.builder().resp3().password("foobared").build();
 
   private static final Supplier<GenericObjectPoolConfig<Connection>> singleConnectionPoolConfig
       = () -> {
