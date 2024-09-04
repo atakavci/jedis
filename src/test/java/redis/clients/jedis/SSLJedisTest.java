@@ -33,7 +33,7 @@ public class SSLJedisTest {
   }
 
   public static void setupTrustStore() {
-    setJvmTrustStore("src/test/resources/truststore.jceks", "jceks");
+    setJvmTrustStore("src/test/resources/truststore1.jceks", "jceks");
   }
 
   private static void setJvmTrustStore(String trustStoreFilePath, String trustStoreType) {

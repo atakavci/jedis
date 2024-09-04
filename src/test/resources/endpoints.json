@@ -11,7 +11,7 @@
     "password": "foobared",
     "tls": true,
     "endpoints": [
-      "rediss://localhost:6390"
+      "rediss://3.255.91.17:12001"
     ]
   },
   "standalone0-acl": {
@@ -35,7 +35,7 @@
     "password": "foobared",
     "tls": false,
     "endpoints": [
-      "redis://localhost:6380"
+      "redis://54.74.186.132:12000"
     ]
   },
   "standalone2-primary": {
