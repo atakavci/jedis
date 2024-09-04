@@ -33,9 +33,9 @@ public final class HostAndPorts {
     clusterHostAndPortList.add(new HostAndPort("localhost", 7383));
     clusterHostAndPortList.add(new HostAndPort("localhost", 7384));
 
-    stableClusterHostAndPortList.add(new HostAndPort("localhost", 7479));
-    stableClusterHostAndPortList.add(new HostAndPort("localhost", 7480));
-    stableClusterHostAndPortList.add(new HostAndPort("localhost", 7481));
+    stableClusterHostAndPortList.add(new HostAndPort("3.255.91.17", 12000));
+    stableClusterHostAndPortList.add(new HostAndPort("54.74.152.148", 12000));
+    stableClusterHostAndPortList.add(new HostAndPort("54.74.186.132", 12000));
   }
 
   public static EndpointConfig getRedisEndpoint(String endpointName) {
