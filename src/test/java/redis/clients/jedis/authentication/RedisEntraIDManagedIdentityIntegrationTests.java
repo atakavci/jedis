@@ -2,6 +2,7 @@ package redis.clients.jedis.authentication;
 
 import static org.junit.Assert.assertEquals;
 
+import java.util.Collections;
 import java.util.UUID;
 
 import org.junit.BeforeClass;
@@ -19,7 +20,7 @@ import redis.clients.jedis.HostAndPorts;
 import redis.clients.jedis.JedisPooled;
 
 public class RedisEntraIDManagedIdentityIntegrationTests {
-    private static final Logger log = LoggerFactory.getLogger(RedisEntraIDIntegrationTests.class);
+  private static final Logger log = LoggerFactory.getLogger(RedisEntraIDIntegrationTests.class);
 
   private static EntraIDTestContext testCtx;
   private static EndpointConfig endpointConfig;
@@ -27,15 +28,15 @@ public class RedisEntraIDManagedIdentityIntegrationTests {
 
   @BeforeClass
   public static void before() {
-      try {
-          testCtx = EntraIDTestContext.DEFAULT;
-          endpointConfig = HostAndPorts.getRedisEndpoint("standalone-entraid-acl");
-          hnp = endpointConfig.getHostAndPort();
-      } catch (IllegalArgumentException e) {
-          log.warn("Skipping test because no Redis endpoint is configured");
-          org.junit.Assume.assumeTrue(false);
-      }
-  }  
+    try {
+      testCtx = EntraIDTestContext.DEFAULT;
+      endpointConfig = HostAndPorts.getRedisEndpoint("standalone-entraid-acl");
+      hnp = endpointConfig.getHostAndPort();
+    } catch (IllegalArgumentException e) {
+      log.warn("Skipping test because no Redis endpoint is configured");
+      org.junit.Assume.assumeTrue(false);
+    }
+  }
 
   // T.1.1
   // Verify authentication using Azure AD with managed identities
@@ -43,8 +44,10 @@ public class RedisEntraIDManagedIdentityIntegrationTests {
   public void withUserAssignedId_azureManagedIdentityIntegrationTest() {
     TokenAuthConfig tokenAuthConfig = EntraIDTokenAuthConfigBuilder.builder()
         .clientId(testCtx.getClientId())
-        .userAssignedManagedIdentity(UserManagedIdentityType.CLIENT_ID, testCtx.getUserAssignedManagedIdentity())
-        .authority(testCtx.getAuthority()).scopes(testCtx.getRedisScopes()).build();
+        .userAssignedManagedIdentity(UserManagedIdentityType.CLIENT_ID,
+          testCtx.getUserAssignedManagedIdentity())
+        .authority(testCtx.getAuthority())
+        .scopes(Collections.singleton("api://AzureADTokenExchange")).build();
 
     DefaultJedisClientConfig jedisConfig = DefaultJedisClientConfig.builder()
         .authXManager(new AuthXManager(tokenAuthConfig)).build();
@@ -63,7 +66,8 @@ public class RedisEntraIDManagedIdentityIntegrationTests {
   public void withSystemAssignedId_azureManagedIdentityIntegrationTest() {
     TokenAuthConfig tokenAuthConfig = EntraIDTokenAuthConfigBuilder.builder()
         .clientId(testCtx.getClientId()).systemAssignedManagedIdentity()
-        .authority(testCtx.getAuthority()).scopes(testCtx.getRedisScopes()).build();
+        .authority(testCtx.getAuthority())
+        .scopes(Collections.singleton("api://AzureADTokenExchange")).build();
 
     DefaultJedisClientConfig jedisConfig = DefaultJedisClientConfig.builder()
         .authXManager(new AuthXManager(tokenAuthConfig)).build();
@@ -75,5 +79,4 @@ public class RedisEntraIDManagedIdentityIntegrationTests {
       jedis.del(key);
     }
   }
-  
 }
