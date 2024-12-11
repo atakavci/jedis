@@ -3,6 +3,7 @@ package redis.clients.jedis.authentication;
 import static org.junit.Assert.assertEquals;
 
 import java.util.Collections;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.BeforeClass;
@@ -25,6 +26,8 @@ public class RedisEntraIDManagedIdentityIntegrationTests {
   private static EntraIDTestContext testCtx;
   private static EndpointConfig endpointConfig;
   private static HostAndPort hnp;
+  private static Set<String> managedIdentityAudience = Collections
+      .singleton("https://redis.azure.com");
 
   @BeforeClass
   public static void before() {
@@ -43,11 +46,9 @@ public class RedisEntraIDManagedIdentityIntegrationTests {
   @Test
   public void withUserAssignedId_azureManagedIdentityIntegrationTest() {
     TokenAuthConfig tokenAuthConfig = EntraIDTokenAuthConfigBuilder.builder()
-        .clientId(testCtx.getClientId())
-        .userAssignedManagedIdentity(UserManagedIdentityType.CLIENT_ID,
+        .userAssignedManagedIdentity(UserManagedIdentityType.OBJECT_ID,
           testCtx.getUserAssignedManagedIdentity())
-        .authority(testCtx.getAuthority())
-        .scopes(Collections.singleton("api://AzureADTokenExchange")).build();
+        .scopes(managedIdentityAudience).build();
 
     DefaultJedisClientConfig jedisConfig = DefaultJedisClientConfig.builder()
         .authXManager(new AuthXManager(tokenAuthConfig)).build();
@@ -65,9 +66,7 @@ public class RedisEntraIDManagedIdentityIntegrationTests {
   @Test
   public void withSystemAssignedId_azureManagedIdentityIntegrationTest() {
     TokenAuthConfig tokenAuthConfig = EntraIDTokenAuthConfigBuilder.builder()
-        .clientId(testCtx.getClientId()).systemAssignedManagedIdentity()
-        .authority(testCtx.getAuthority())
-        .scopes(Collections.singleton("api://AzureADTokenExchange")).build();
+        .systemAssignedManagedIdentity().scopes(managedIdentityAudience).build();
 
     DefaultJedisClientConfig jedisConfig = DefaultJedisClientConfig.builder()
         .authXManager(new AuthXManager(tokenAuthConfig)).build();
