@@ -48,7 +48,7 @@ public class TokenBasedAuthenticationClusterIntegrationTests {
     @BeforeClass
     public static void before() {
         try {
-            endpointConfig = HostAndPorts.getRedisEndpoint("cluster-entraid-acl");
+            endpointConfig = HostAndPorts.getRedisEndpoint("cluster");
             hnp = endpointConfig.getHostAndPort();
         } catch (IllegalArgumentException e) {
             log.warn("Skipping test because no Redis endpoint is configured");
@@ -64,9 +64,9 @@ public class TokenBasedAuthenticationClusterIntegrationTests {
                 return new IdentityProvider() {
                     @Override
                     public Token requestToken() {
-                        return new SimpleToken("default", "cluster",
-                                System.currentTimeMillis() + 5 * 1000, System.currentTimeMillis(),
-                                null);
+                        return new SimpleToken(endpointConfig.getUsername(),
+                                endpointConfig.getPassword(), System.currentTimeMillis() + 5 * 1000,
+                                System.currentTimeMillis(), null);
                     }
                 };
             }
@@ -95,9 +95,9 @@ public class TokenBasedAuthenticationClusterIntegrationTests {
                 return new IdentityProvider() {
                     @Override
                     public Token requestToken() {
-                        return new SimpleToken("default", "cluster",
-                                System.currentTimeMillis() + 5 * 1000, System.currentTimeMillis(),
-                                null);
+                        return new SimpleToken(endpointConfig.getUsername(),
+                                endpointConfig.getPassword(), System.currentTimeMillis() + 5 * 1000,
+                                System.currentTimeMillis(), null);
                     }
                 };
             }
