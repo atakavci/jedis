@@ -61,6 +61,14 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
     this(new HostAndPort(Protocol.DEFAULT_HOST, Protocol.DEFAULT_PORT));
   }
 
+  public UnifiedJedis(int i) {
+    this(new HostAndPort(Protocol.DEFAULT_HOST, Protocol.DEFAULT_PORT));
+  }
+
+  public UnifiedJedis(long y) {
+    this(new HostAndPort(Protocol.DEFAULT_HOST, Protocol.DEFAULT_PORT));
+  }
+
   public UnifiedJedis(HostAndPort hostAndPort) {
     this(new PooledConnectionProvider(hostAndPort), (RedisProtocol) null);
   }
