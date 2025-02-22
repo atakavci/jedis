@@ -66,7 +66,8 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   }
 
   public UnifiedJedis(long y) {
-    this(new HostAndPort(Protocol.DEFAULT_HOST, Protocol.DEFAULT_PORT));
+    this(new HostAndPort(Protocol.DEFAULT_HOST, 
+        Protocol.DEFAULT_PORT));
   }
 
   public UnifiedJedis(HostAndPort hostAndPort) {
