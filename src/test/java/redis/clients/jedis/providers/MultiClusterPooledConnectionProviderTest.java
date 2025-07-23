@@ -2,6 +2,8 @@ package redis.clients.jedis.providers;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 
+import org.awaitility.Awaitility;
+import org.awaitility.Durations;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +14,7 @@ import redis.clients.jedis.exceptions.JedisValidationException;
 import redis.clients.jedis.mcf.Endpoint;
 import redis.clients.jedis.providers.MultiClusterPooledConnectionProvider.Cluster;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -64,11 +67,9 @@ public class MultiClusterPooledConnectionProviderTest {
     }
 
     @Test
-    public void testIterateActiveCluster() {
-        Cluster c1 = provider.getCluster(endpointStandalone0.getHostAndPort());
-        assertTrue(c1.isHealthy());
-        Cluster c2 = provider.getCluster(endpointStandalone1.getHostAndPort());
-        assertTrue(c2.isHealthy());
+    public void testIterateActiveCluster() throws InterruptedException {
+        waitForClustersToGetHealthy(provider.getCluster(endpointStandalone0.getHostAndPort()),
+            provider.getCluster(endpointStandalone1.getHostAndPort()));
 
         Endpoint e2 = provider.iterateActiveCluster();
         assertEquals(endpointStandalone1.getHostAndPort(), e2);
@@ -76,6 +77,9 @@ public class MultiClusterPooledConnectionProviderTest {
 
     @Test
     public void testIterateActiveClusterOutOfRange() {
+        waitForClustersToGetHealthy(provider.getCluster(endpointStandalone0.getHostAndPort()),
+            provider.getCluster(endpointStandalone1.getHostAndPort()));
+
         provider.setActiveCluster(endpointStandalone0.getHostAndPort());
         provider.getCluster().setDisabled(true);
 
@@ -83,24 +87,25 @@ public class MultiClusterPooledConnectionProviderTest {
         provider.getCluster().setDisabled(true);
 
         assertEquals(endpointStandalone1.getHostAndPort(), e2);
-
-        assertThrows(JedisConnectionException.class, () -> provider.iterateActiveCluster()); // Should throw an
-                                                                                             // exception
+        // Should throw an exception
+        assertThrows(JedisConnectionException.class, () -> provider.iterateActiveCluster());
     }
 
     @Test
     public void testCanIterateOnceMore() {
-        provider.setActiveCluster(endpointStandalone0.getHostAndPort());
-        Cluster c1 = provider.getCluster(endpointStandalone0.getHostAndPort());
-        assertTrue(c1.isHealthy());
-        Cluster c2 = provider.getCluster(endpointStandalone1.getHostAndPort());
-        assertTrue(c2.isHealthy());
-        provider.getCluster().setDisabled(true);
-        assertFalse(c1.isHealthy());
-        assertTrue(c2.isHealthy());
-        provider.iterateActiveCluster();
+        waitForClustersToGetHealthy(provider.getCluster(endpointStandalone0.getHostAndPort()),
+            provider.getCluster(endpointStandalone1.getHostAndPort()));
 
+        provider.setActiveCluster(endpointStandalone0.getHostAndPort());
+        provider.getCluster().setDisabled(true);
+
+        provider.iterateActiveCluster();
         assertFalse(provider.canIterateOnceMore());
+    }
+
+    private void waitForClustersToGetHealthy(Cluster... clusters) {
+        Awaitility.await().pollInterval(Durations.ONE_HUNDRED_MILLISECONDS).atMost(Durations.TWO_SECONDS)
+            .until(() -> Arrays.stream(clusters).allMatch(Cluster::isHealthy));
     }
 
     @Test
