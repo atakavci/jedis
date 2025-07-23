@@ -24,7 +24,7 @@ public class MultiClusterPooledConnectionProviderTest {
     private final EndpointConfig endpointStandalone0 = HostAndPorts.getRedisEndpoint("standalone0");
     private final EndpointConfig endpointStandalone1 = HostAndPorts.getRedisEndpoint("standalone1");
 
-    private MultiClusterPooledConnectionProvider provider;
+    private volatile MultiClusterPooledConnectionProvider provider;
 
     @BeforeEach
     public void setUp() {
@@ -44,6 +44,7 @@ public class MultiClusterPooledConnectionProviderTest {
     @AfterEach
     public void destroy() {
         provider.close();
+        provider = null;
     }
 
     @Test
