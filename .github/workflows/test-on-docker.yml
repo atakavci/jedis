@@ -79,7 +79,7 @@ jobs:
           export TEST_WORK_FOLDER=$REDIS_ENV_WORK_DIR
           echo $TEST_WORK_FOLDER
           if [ -z "$TESTS" ]; then
-            mvn clean compile test
+            mvn clean compile test -Dtest=MultiClusterPooledConnectionProviderTest
           else
             mvn -Dtest=$TESTS clean compile test
           fi
