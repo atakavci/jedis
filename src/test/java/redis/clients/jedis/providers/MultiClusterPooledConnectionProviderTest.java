@@ -1,6 +1,8 @@
 package redis.clients.jedis.providers;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.*;
@@ -8,6 +10,7 @@ import redis.clients.jedis.MultiClusterClientConfig.ClusterConfig;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisValidationException;
 import redis.clients.jedis.mcf.Endpoint;
+import redis.clients.jedis.providers.MultiClusterPooledConnectionProvider.Cluster;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -38,6 +41,11 @@ public class MultiClusterPooledConnectionProviderTest {
             new MultiClusterClientConfig.Builder(clusterConfigs).build());
     }
 
+    @AfterEach
+    public void destroy() {
+        provider.close();
+    }
+
     @Test
     public void testCircuitBreakerForcedTransitions() {
 
@@ -56,6 +64,11 @@ public class MultiClusterPooledConnectionProviderTest {
 
     @Test
     public void testIterateActiveCluster() {
+        Cluster c1 = provider.getCluster(endpointStandalone0.getHostAndPort());
+        assertTrue(c1.isHealthy());
+        Cluster c2 = provider.getCluster(endpointStandalone1.getHostAndPort());
+        assertTrue(c2.isHealthy());
+
         Endpoint e2 = provider.iterateActiveCluster();
         assertEquals(endpointStandalone1.getHostAndPort(), e2);
     }
@@ -77,9 +90,15 @@ public class MultiClusterPooledConnectionProviderTest {
     @Test
     public void testCanIterateOnceMore() {
         provider.setActiveCluster(endpointStandalone0.getHostAndPort());
+        Cluster c1 = provider.getCluster(endpointStandalone0.getHostAndPort());
+        assertTrue(c1.isHealthy());
+        Cluster c2 = provider.getCluster(endpointStandalone1.getHostAndPort());
+        assertTrue(c2.isHealthy());
         provider.getCluster().setDisabled(true);
+        assertFalse(c1.isHealthy());
+        assertTrue(c2.isHealthy());
         provider.iterateActiveCluster();
-        
+
         assertFalse(provider.canIterateOnceMore());
     }
 
