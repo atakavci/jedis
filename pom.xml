@@ -272,6 +272,9 @@
 					<systemPropertyVariables>
 						<redis-hosts>${redis-hosts}</redis-hosts>
 					</systemPropertyVariables>
+					<includes>
+            			<include>**/ActiveActiveLocalFailoverTest.java</include>
+        			</includes>
 					<excludes>
 						<exclude>**/examples/*Example.java</exclude>
 					</excludes>
