@@ -67,6 +67,9 @@ public class ActiveActiveFailoverTest {
     builder.circuitBreakerSlidingWindowMinCalls(1);
     builder.circuitBreakerFailureRateThreshold(10.0f); // percentage of failures to trigger circuit breaker
 
+    builder.failbackSupported(true);
+    builder.failbackCheckInterval(1000);
+
     builder.retryWaitDuration(10);
     builder.retryMaxAttempts(1);
     builder.retryWaitDurationExponentialBackoffMultiplier(1);
@@ -79,6 +82,10 @@ public class ActiveActiveFailoverTest {
 
       Instant failoverAt = null;
 
+      boolean failbackHappened = false;
+
+      Instant failbackAt = null;
+
       public String getCurrentClusterName() {
         return currentClusterName;
       }
@@ -90,8 +97,13 @@ public class ActiveActiveFailoverTest {
             "\n\n====FailoverEvent=== \nJedis failover to cluster: {}\n====FailoverEvent===\n\n",
             clusterName);
 
-        failoverHappened = true;
-        failoverAt = Instant.now();
+        if (failoverHappened) {
+          failbackHappened = true;
+          failbackAt = Instant.now();
+        } else {
+          failoverHappened = true;
+          failoverAt = Instant.now();
+        }
       }
     }
 
@@ -153,20 +165,21 @@ public class ActiveActiveFailoverTest {
         }
       }
       return true;
-    }, 18);
+    }, 4);
     fakeApp.setKeepExecutingForSeconds(30);
     Thread t = new Thread(fakeApp);
     t.start();
 
     HashMap<String, Object> params = new HashMap<>();
     params.put("bdb_id", endpoint.getBdbId());
-    params.put("rlutil_command", "pause_bdb");
+    params.put("actions",
+        "[{\"type\":\"execute_rlutil_command\",\"params\":{\"rlutil_command\":\"pause_bdb\"}},{\"type\":\"wait\",\"params\":{\"wait_time\":\"15\"}},{\"type\":\"execute_rlutil_command\",\"params\":{\"rlutil_command\":\"resume_bdb\"}}]");
 
     FaultInjectionClient.TriggerActionResponse actionResponse = null;
 
     try {
-      log.info("Triggering bdb_pause");
-      actionResponse = faultClient.triggerAction("execute_rlutil_command", params);
+      log.info("Triggering bdb_pause + wait 15 seconds + bdb_resume");
+      actionResponse = faultClient.triggerAction("sequence_of_actions", params);
     } catch (IOException e) {
       fail("Fault Injection Server error:" + e.getMessage());
     }
@@ -184,11 +197,15 @@ public class ActiveActiveFailoverTest {
 
     log.info("First connection pool state: active: {}, idle: {}", pool.getNumActive(),
         pool.getNumIdle());
-    log.info("Full failover time: {} s",
-        Duration.between(reporter.failoverAt, lastFailedCommandAt.get()).getSeconds());
+    log.info("Failover happened at: {}", reporter.failoverAt);
+    log.info("Failback happened at: {}", reporter.failbackAt);
+    log.info("Last failed command at: {}", lastFailedCommandAt.get());
+
 
     assertEquals(0, pool.getNumActive());
     assertTrue(fakeApp.capturedExceptions().isEmpty());
+    assertTrue(reporter.failoverHappened);
+    assertTrue(reporter.failbackHappened);
 
     client.close();
   }
