@@ -6,7 +6,8 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Tags;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.*;
@@ -48,8 +49,9 @@ public class ActiveActiveFailoverTest {
         }
     }
 
-    @Test
-    public void testFailover() {
+    @ParameterizedTest
+    @CsvSource({ "9", "16", "18" })
+    public void testFailover(int numberOfThreads) {
 
         MultiClusterClientConfig.ClusterConfig[] clusterConfig = new MultiClusterClientConfig.ClusterConfig[2];
 
@@ -69,9 +71,10 @@ public class ActiveActiveFailoverTest {
         builder.circuitBreakerSlidingWindowMinCalls(1);
         builder.circuitBreakerFailureRateThreshold(10.0f); // percentage of failures to trigger circuit breaker
 
-        builder.failbackSupported(true);
+        builder.failbackSupported(false);
         builder.failbackCheckInterval(1000);
         builder.gracePeriod(10000);
+        builder.fastFailover(true);
 
         builder.retryWaitDuration(10);
         builder.retryMaxAttempts(1);
@@ -119,6 +122,7 @@ public class ActiveActiveFailoverTest {
         AtomicLong retryingThreadsCounter = new AtomicLong(0);
         AtomicLong failedCommandsAfterFailover = new AtomicLong(0);
         AtomicReference<Instant> lastFailedCommandAt = new AtomicReference<>();
+        AtomicReference<Exception> lastFailedBeforeFailover = new AtomicReference<>();
 
         // Start thread that imitates an application that uses the client
         MultiThreadedFakeApp fakeApp = new MultiThreadedFakeApp(client, (UnifiedJedis c) -> {
@@ -149,6 +153,7 @@ public class ActiveActiveFailoverTest {
                     if (reporter.failoverHappened) {
                         long failedCommands = failedCommandsAfterFailover.incrementAndGet();
                         lastFailedCommandAt.set(Instant.now());
+                        lastFailedBeforeFailover.set(e);
                         log.warn(
                             "Thread {} failed to execute command after failover. Failed commands after failover: {}",
                             threadId, failedCommands);
@@ -167,7 +172,7 @@ public class ActiveActiveFailoverTest {
                 }
             }
             return true;
-        }, 18);
+        }, numberOfThreads);
         fakeApp.setKeepExecutingForSeconds(30);
         Thread t = new Thread(fakeApp);
         t.start();
@@ -200,15 +205,21 @@ public class ActiveActiveFailoverTest {
         log.info("First connection pool state: active: {}, idle: {}", pool.getNumActive(), pool.getNumIdle());
         log.info("Failover happened at: {}", reporter.failoverAt);
         log.info("Failback happened at: {}", reporter.failbackAt);
-        log.info("Last failed command at: {}", lastFailedCommandAt.get());
-        Duration fullFailoverTime = Duration.between(reporter.failoverAt, lastFailedCommandAt.get());
-        log.info("Full failover time: {} s", fullFailoverTime.getSeconds());
+        if (lastFailedCommandAt.get() != null) {
+            log.info("Last failed command at: {}", lastFailedCommandAt.get());
+            Duration fullFailoverTime = Duration.between(reporter.failoverAt, lastFailedCommandAt.get());
 
+            log.info("Full failover time: {} s", fullFailoverTime.getSeconds());
+            assertThat(fullFailoverTime.getSeconds(), Matchers.lessThanOrEqualTo(2L));
+        } else {
+            log.info("No failed commands after failover!!");
+        }
+        if (lastFailedBeforeFailover.get() != null) {
+            log.info("Last failed command before failover at: {}", lastFailedBeforeFailover.get());
+        }
         assertEquals(0, pool.getNumActive());
         assertTrue(fakeApp.capturedExceptions().isEmpty());
         assertTrue(reporter.failoverHappened);
-        assertTrue(reporter.failbackHappened);
-        assertThat(fullFailoverTime.getSeconds(), Matchers.greaterThanOrEqualTo(30L));
 
         client.close();
     }
