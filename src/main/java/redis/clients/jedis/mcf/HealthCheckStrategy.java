@@ -41,6 +41,9 @@ public interface HealthCheckStrategy extends Closeable {
   }
 
   public static class Config {
+    private static final int INTERVAL_DEFAULT = 5000;
+    private static final int TIMEOUT_DEFAULT = 1000;
+    private static final int MIN_CONSECUTIVE_SUCCESS_COUNT_DEFAULT = 3;
     protected final int interval;
     protected final int timeout;
     protected final int minConsecutiveSuccessCount;
@@ -68,14 +71,14 @@ public interface HealthCheckStrategy extends Closeable {
      * @return a new Config instance
      */
     public static Config create() {
-      return new Builder<>().build();
+      return builder().build();
     }
 
     /**
      * Create a new builder for HealthCheckStrategy.Config.
      * @return a new Builder instance
      */
-    public static Builder<?, Config> builder() {
+    public static Builder<?, ? extends Config> builder() {
       return new Builder<>();
     }
 
@@ -85,9 +88,9 @@ public interface HealthCheckStrategy extends Closeable {
      * @param <C> the config type being built
      */
     public static class Builder<T extends Builder<T, C>, C extends Config> {
-      protected int interval = 1000;
-      protected int timeout = 1000;
-      protected int minConsecutiveSuccessCount = 3;
+      protected int interval = INTERVAL_DEFAULT;
+      protected int timeout = TIMEOUT_DEFAULT;
+      protected int minConsecutiveSuccessCount = MIN_CONSECUTIVE_SUCCESS_COUNT_DEFAULT;
 
       /**
        * Set the interval between health checks in milliseconds.
@@ -126,8 +129,9 @@ public interface HealthCheckStrategy extends Closeable {
        * Build the Config instance.
        * @return a new Config instance
        */
-      public Config build() {
-        return new Config(interval, timeout, minConsecutiveSuccessCount);
+      @SuppressWarnings("unchecked")
+      public C build() {
+        return (C) new Config(interval, timeout, minConsecutiveSuccessCount);
       }
     }
   }

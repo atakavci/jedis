@@ -81,12 +81,12 @@ public class LagAwareStrategy implements HealthCheckStrategy {
   public static class Config extends HealthCheckStrategy.Config {
 
     public static final boolean EXTENDED_CHECK_DEFAULT = true;
-    public static final Duration AVAILABILITY_LAG_TOLERANCE_DEFAULT = Duration.ofMillis(100);
+    public static final Duration AVAILABILITY_LAG_TOLERANCE_DEFAULT = Duration.ofMillis(5000);
 
     private final Endpoint restEndpoint;
     private final Supplier<RedisCredentials> credentialsSupplier;
 
-    // Maximum acceptable lag in milliseconds (default: 100);
+    // Maximum acceptable lag in milliseconds (default: 5000);
     private final Duration availability_lag_tolerance;
 
     // Enable extended lag checking (default: true - performs lag validation in addition to standard
@@ -95,8 +95,7 @@ public class LagAwareStrategy implements HealthCheckStrategy {
     private final boolean extendedCheckEnabled;
 
     public Config(Endpoint restEndpoint, Supplier<RedisCredentials> credentialsSupplier) {
-      this(builder(restEndpoint, credentialsSupplier).interval(1000).timeout(1000)
-          .minConsecutiveSuccessCount(3)
+      this(builder(restEndpoint, credentialsSupplier)
           .availabilityLagTolerance(AVAILABILITY_LAG_TOLERANCE_DEFAULT)
           .extendedCheckEnabled(EXTENDED_CHECK_DEFAULT));
     }
@@ -135,6 +134,15 @@ public class LagAwareStrategy implements HealthCheckStrategy {
     public static ConfigBuilder builder(Endpoint endpoint,
         Supplier<RedisCredentials> credentialsSupplier) {
       return new ConfigBuilder(endpoint, credentialsSupplier);
+    }
+
+    /**
+     * Use {@link LagAwareStrategy.Config#builder(Endpoint, Supplier)} instead.
+     * @return a new Builder instance
+     */
+    public static ConfigBuilder builder() {
+      throw new UnsupportedOperationException(
+          "Endpoint and credentials are required to build LagAwareStrategy.Config.");
     }
 
     /**
