@@ -67,8 +67,7 @@ public class UnavailableConnectionTest {
       // ignore this due to behavior change in commons-pool2 2.13.1 ;
       // GenericObjectPool#invalidateObject now attempts to replace the invalidated instance
       // which fails when ConnectionFactory#makeObject() fails with an exception.
-      assertTrue(
-        e.getCause().getMessage().contains("java.net.SocketException: Connection reset"),
+      assertTrue(e.getCause().getMessage().contains("java.net.SocketException: Connection reset"),
         "Failing with unexpected message!");
     }
     try {
@@ -80,6 +79,6 @@ public class UnavailableConnectionTest {
   }
 
   public static void cleanupAvoidQuitInDestroyObject() {
-    // poolForBrokenJedis1.close();
+    poolForBrokenJedis1.close();
   }
 }
