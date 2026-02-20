@@ -8,6 +8,7 @@ import redis.clients.jedis.CommandObject;
 import redis.clients.jedis.Connection;
 import redis.clients.jedis.annots.Experimental;
 import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.executors.CommandExecutor;
 import redis.clients.jedis.mcf.MultiDbConnectionProvider.Database;
 
@@ -52,25 +53,56 @@ public class MultiDbCommandExecutor extends MultiDbFailoverBase implements Comma
    * Functional interface wrapped in retry and circuit breaker logic to handle happy path scenarios
    */
   private <T> T handleExecuteCommand(CommandObject<T> commandObject, Database database) {
-    Connection connection;
+    Connection connection = acquireConnection(database);
+    Exception initialException = null;
     try {
-      connection = database.getConnection();
+      return connection.executeCommand(commandObject);
+    } catch (Exception e) {
+      initialException = e;
+      if (isFailDuringFailover(e, database)) {
+        initialException = new ConnectionFailoverException(
+            "Command failed during failover: " + database.getCircuitBreaker().getName(), e);
+      }
+      // IMPORTANT:
+      // throwing 'e' below does not hold any value since closeAndSuppress() will capture and
+      // rethrow the 'initialException' in favor of suppressing any potential exception from
+      // connection.close()
+      // This act of suppressing exception is due to the change in
+      // org.apache.commons.pool2.impl.GenericObjectPool#invalidateObject() at version 2.13.1.
+      // This version attempts to replace the invalidated instance,
+      // and fails when ConnectionFactory#makeObject() fails.
+      throw e;
+    } finally {
+      closeAndSuppress(connection, initialException);
+    }
+  }
+
+  private Connection acquireConnection(Database database) {
+    try {
+      return database.getConnection();
     } catch (JedisConnectionException e) {
       provider.assertOperability();
       throw e;
     }
+  }
+
+  private boolean isFailDuringFailover(Exception e, Database database) {
+    return database.retryOnFailover() && !isActiveDatabase(database)
+        && isCircuitBreakerTrackedException(e, database);
+  }
+
+  private void closeAndSuppress(Connection connection, Exception initialException) {
     try {
-      return connection.executeCommand(commandObject);
-    } catch (Exception e) {
-      if (database.retryOnFailover() && !isActiveDatabase(database)
-          && isCircuitBreakerTrackedException(e, database)) {
-        throw new ConnectionFailoverException(
-            "Command failed during failover: " + database.getCircuitBreaker().getName(), e);
-      }
-      throw e;
-    } finally {
       connection.close();
+    } catch (Exception e) {
+      if (initialException != null) {
+        initialException.addSuppressed(e);
+      } else {
+        throw e;
+      }
     }
+    if (initialException instanceof RuntimeException) throw (RuntimeException) initialException;
+    if (initialException != null) throw new JedisException(initialException);
   }
 
   /**
