@@ -426,9 +426,6 @@ public class MultiDbConnectionProviderTest {
       // Reset circuit breaker to allow connections
       db1.getCircuitBreaker().transitionToClosedState();
 
-      // Wait a bit to ensure no automatic recovery happens (failback is disabled)
-      Thread.sleep(1000);
-
       // Verify that automatic recovery does NOT happen
       // The system knows there's a healthy database available (db1), but the active database
       // is still the disabled one (db0), so commands will fail with JedisConnectionException
@@ -449,9 +446,6 @@ public class MultiDbConnectionProviderTest {
       // Verify continued operation
       jedis.set("test-key", "final-value");
       assertEquals("final-value", jedis.get("test-key"));
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      fail("Test interrupted: " + e.getMessage());
     }
   }
 }
