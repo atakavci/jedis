@@ -27,13 +27,15 @@ Skim [README.md](README.md), [pom.xml](pom.xml). Walk an existing command (e.g. 
 
 ## 3. Implement
 
-Always add **both** `String` and `byte[]` overloads. Layers in order:
+Always add **both** `String` and `byte[]` overloads. **Javadoc every new public class and method** — class-level on Params / Args / resp types; per-method on fluent setters, enum constants, interface methods, and resp getters. Binary and pipeline overloads `{@link}` back to the canonical method rather than duplicate, but are never left bare. Inline comments only where the *why* is non-obvious (RESP2/3 quirks, version workarounds, subtle invariants).
+
+Layers in order:
 
 1. **Protocol token** — [Protocol.java](src/main/java/redis/clients/jedis/Protocol.java): add to `Protocol.Command` (in the right `// <-- group` block) and any new sub-tokens to `Protocol.Keyword`. Module commands go into the module's `*Protocol` enum. When the wire token != Java identifier (hyphens, etc.), use the explicit-name constructor (see `SentinelKeyword.GET_MASTER_ADDR_BY_NAME`).
 2. **Args / Params** (only if structured options): mutually-exclusive choice → enum in [args/](src/main/java/redis/clients/jedis/args/) implementing `Rawable` (model: `BitOP`, `ListPosition`); open flag bag → class in [params/](src/main/java/redis/clients/jedis/params/) with fluent setters + `addParams(CommandArguments)` (model: [SetParams.java](src/main/java/redis/clients/jedis/params/SetParams.java), [GetExParams.java](src/main/java/redis/clients/jedis/params/GetExParams.java)).
-3. **Public interfaces** — [commands/](src/main/java/redis/clients/jedis/commands/): declare on `XxxCommands` (sync, String), `XxxBinaryCommands` (sync, byte[]), `XxxPipelineCommands` (`Response<T>`, String), `XxxPipelineBinaryCommands` (`Response<T>`, byte[]). Javadoc on the String overload: `<b><a href="https://redis.io/commands/<name>">CMD Command</a></b>`, short description, time complexity, `@param`/`@return`. Mirror arity (no-params + with-`Params`) of neighbors.
+3. **Public interfaces** — [commands/](src/main/java/redis/clients/jedis/commands/): declare on `XxxCommands` (sync, String), `XxxBinaryCommands` (sync, byte[]), `XxxPipelineCommands` (`Response<T>`, String), `XxxPipelineBinaryCommands` (`Response<T>`, byte[]). The canonical (String) overload gets the full Javadoc: `<b><a href="https://redis.io/commands/<name>">CMD Command</a></b>` link, short description, time complexity, `@param`/`@return`. Mirror arity (no-params + with-`Params`) of neighbors.
 4. **CommandObjects factories** — [CommandObjects.java](src/main/java/redis/clients/jedis/CommandObjects.java): `public final CommandObject<T> xxx(...)` for every overload (String+byte[], with/without `Params`). Build with `commandArguments(Command.XXX).key(key).add(value).addParams(params)` + `BuilderFactory.*`. Cache zero-arg variants (see `PING_COMMAND_OBJECT`). For RESP2/3 split: select builder inline.
-5. **Response decoding** — [BuilderFactory.java](src/main/java/redis/clients/jedis/BuilderFactory.java) / [resps/](src/main/java/redis/clients/jedis/resps/): reuse existing builders (`STRING`, `BINARY`, `LONG`, `DOUBLE`, `BOOLEAN`, `STRING_LIST`, `BINARY_LIST`, `KEYED_TUPLE_LIST`, …). For structured replies add resp class + `Builder<T>` handling RESP2 array AND RESP3 map (models: `LCSMatchResult`, `StreamInfo`, `LibraryInfo`).
+5. **Response decoding** — [BuilderFactory.java](src/main/java/redis/clients/jedis/BuilderFactory.java) / [resps/](src/main/java/redis/clients/jedis/resps/): reuse existing builders (`STRING`, `BINARY`, `LONG`, `DOUBLE`, `BOOLEAN`, `STRING_LIST`, `BINARY_LIST`, `KEYED_TUPLE_LIST`, …). For structured replies add resp class + `Builder<T>` handling RESP2 array AND RESP3 map (models: `LCSMatchResult`, `StreamInfo`, `LibraryInfo`). Javadoc the `Builder<T>` only when its parsing rule is non-obvious.
 6. **Sync dispatcher** — [UnifiedJedis.java](src/main/java/redis/clients/jedis/UnifiedJedis.java): `@Override` each interface method as `return executeCommand(commandObjects.xxx(...));` in interface order.
 7. **Pipeline dispatcher** — [PipeliningBase.java](src/main/java/redis/clients/jedis/PipeliningBase.java): `return appendCommand(commandObjects.xxx(...));`. Covers both `Pipeline` and `Transaction`; don't duplicate in those classes unless behavior diverges.
 8. **Cluster override** (only if key/slot extraction is non-standard) — [ClusterCommandObjects.java](src/main/java/redis/clients/jedis/ClusterCommandObjects.java).
@@ -60,7 +62,7 @@ Always add **both** `String` and `byte[]` overloads. Layers in order:
 - ✅ Protocol token + any new keywords
 - ✅ String + byte[] overloads on every layer
 - ✅ Sync + Pipeline interfaces, `CommandObjects`, `UnifiedJedis`, `PipeliningBase` all in sync
-- ✅ Javadoc with redis.io link on public methods
+- ✅ Javadoc on every new public class + method (redis.io link on canonical interface method); inline comments only where the *why* is non-obvious
 - ✅ Tests at all three layers, green on RESP2 + RESP3
 - ✅ `mvn -q -DskipTests compile` + `make format` clean
 - ✅ Method ordering / naming / imports match project conventions
