@@ -1539,6 +1539,11 @@ public abstract class PipeliningBase
   }
 
   @Override
+  public Response<Long> arcount(String key) {
+    return appendCommand(commandObjects.arcount(key));
+  }
+
+  @Override
   public Response<StreamEntryID> xadd(String key, StreamEntryID id, Map<String, String> hash) {
     return appendCommand(commandObjects.xadd(key, id, hash));
   }
@@ -2352,6 +2357,11 @@ public abstract class PipeliningBase
   @Override
   public Response<Long> pfcount(byte[]... keys) {
     return appendCommand(commandObjects.pfcount(keys));
+  }
+
+  @Override
+  public Response<Long> arcount(byte[] key) {
+    return appendCommand(commandObjects.arcount(key));
   }
 
   @Override

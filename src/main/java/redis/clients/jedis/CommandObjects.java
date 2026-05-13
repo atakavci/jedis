@@ -2578,6 +2578,16 @@ public class CommandObjects {
   }
   // Hyper Log Log commands
 
+  // Array commands
+  public final CommandObject<Long> arcount(String key) {
+    return new CommandObject<>(commandArguments(ARCOUNT).key(key), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Long> arcount(byte[] key) {
+    return new CommandObject<>(commandArguments(ARCOUNT).key(key), BuilderFactory.LONG);
+  }
+  // Array commands
+
   // Stream commands
   public final CommandObject<StreamEntryID> xadd(String key, StreamEntryID id, Map<String, String> hash) {
     return new CommandObject<>(addFlatMapArgs(commandArguments(XADD).key(key).add(id == null ? StreamEntryID.NEW_ENTRY : id), hash),

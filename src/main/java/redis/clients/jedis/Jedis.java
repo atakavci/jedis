@@ -4549,6 +4549,12 @@ public class Jedis implements ServerCommands, DatabaseCommands, JedisCommands, J
   }
 
   @Override
+  public long arcount(final byte[] key) {
+    checkIsInMultiOrPipeline();
+    return connection.executeCommand(commandObjects.arcount(key));
+  }
+
+  @Override
   public ScanResult<byte[]> scan(final byte[] cursor) {
     checkIsInMultiOrPipeline();
     return connection.executeCommand(commandObjects.scan(cursor));
@@ -9400,6 +9406,12 @@ public class Jedis implements ServerCommands, DatabaseCommands, JedisCommands, J
   public String pfmerge(final String destkey, final String... sourcekeys) {
     checkIsInMultiOrPipeline();
     return connection.executeCommand(commandObjects.pfmerge(destkey, sourcekeys));
+  }
+
+  @Override
+  public long arcount(final String key) {
+    checkIsInMultiOrPipeline();
+    return connection.executeCommand(commandObjects.arcount(key));
   }
 
   @Override

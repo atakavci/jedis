@@ -3413,6 +3413,18 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   }
   // Hyper Log Log commands
 
+  // Array commands
+  @Override
+  public long arcount(String key) {
+    return executeCommand(commandObjects.arcount(key));
+  }
+
+  @Override
+  public long arcount(byte[] key) {
+    return executeCommand(commandObjects.arcount(key));
+  }
+  // Array commands
+
   // Stream commands
   @Override
   public StreamEntryID xadd(String key, StreamEntryID id, Map<String, String> hash) {
