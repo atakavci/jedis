@@ -64,6 +64,7 @@ public class TrackingConnectionPool extends ConnectionPool {
         } finally {
           factoryTrackedObjects.remove(object.getObject());
         }
+        // this can make a marginal improvement on fast failover duration!
         if (failFast) {
           object.getObject().close();
           throw new JedisConnectionException("Failed to create connection!");
