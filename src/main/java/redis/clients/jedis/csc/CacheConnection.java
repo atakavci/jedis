@@ -19,7 +19,7 @@ public class CacheConnection extends Connection {
   public static class Builder extends Connection.Builder {
     private Cache cache;
 
-    private Builder(Cache cache) {
+    public Builder(Cache cache) {
       if (cache == null) {
         throw new IllegalArgumentException("Cache cannot be null!");
       }

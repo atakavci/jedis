@@ -33,8 +33,19 @@ public class TrackingConnectionPool extends ConnectionPool {
 
     private static Connection.Builder createCustomConnectionBuilder(
         ConnectionFactory.Builder factoryBuilder, JedisClientConfig clientConfig) {
-      Connection.Builder connBuilder = factoryBuilder.getCache() == null ? Connection.builder()
-          : CacheConnection.builder(factoryBuilder.getCache());
+      Connection.Builder connBuilder = factoryBuilder.getCache() == null
+          ? new Connection.Builder() {
+            @Override
+            public Connection build() {
+              return createConnection();
+            }
+          }
+          : new CacheConnection.Builder(factoryBuilder.getCache()) {
+            @Override
+            public Connection build() {
+              return createConnection();
+            }
+          };
 
       return connBuilder.socketFactory(factoryBuilder.getJedisSocketFactory())
           .clientConfig(clientConfig);
@@ -47,7 +58,12 @@ public class TrackingConnectionPool extends ConnectionPool {
       }
       try {
         PooledObject<Connection> object = super.makeObject();
-        // this can make a marginal improvement on fast failover duration!
+        factoryTrackedObjects.add(object.getObject());
+        try {
+          object.getObject().initializeFromClientConfig();
+        } finally {
+          factoryTrackedObjects.remove(object.getObject());
+        }
         if (failFast) {
           object.getObject().close();
           throw new JedisConnectionException("Failed to create connection!");
@@ -57,18 +73,6 @@ public class TrackingConnectionPool extends ConnectionPool {
         throw e;
       } catch (Exception e) {
         throw new JedisConnectionException(e);
-      }
-    }
-
-    @Override
-    protected void initialize(Connection conn) {
-      // Track the connection while it is being initialized so forceDisconnect() can interrupt
-      // a thread that is blocked inside HELLO/AUTH/CLIENT round-trips.
-      factoryTrackedObjects.add(conn);
-      try {
-        super.initialize(conn);
-      } finally {
-        factoryTrackedObjects.remove(conn);
       }
     }
 
