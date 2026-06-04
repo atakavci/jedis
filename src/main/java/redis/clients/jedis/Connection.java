@@ -71,6 +71,11 @@ public class Connection implements Closeable {
     protected Connection createConnection() {
       return new Connection(this);
     }
+
+    protected Connection initialize(Connection conn) {
+      conn.initializeFromClientConfig();
+      return conn;
+    }
   }
 
   public static Builder builder() {
@@ -546,7 +551,7 @@ public class Connection implements Closeable {
     return true;
   }
 
-  public void initializeFromClientConfig() {
+  void initializeFromClientConfig() {
     this.initializeFromClientConfig(clientConfig);
   }
 

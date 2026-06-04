@@ -21,34 +21,46 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 
 public class TrackingConnectionPool extends ConnectionPool {
 
+  // Minimal wrapper to expose Connection.Builder's protected initialize() method
+  private static class InitWrapper extends Connection.Builder {
+    private void initConnection(Connection conn) {
+      super.initialize(conn);
+    }
+
+    @Override
+    protected Connection initialize(Connection conn) {
+      return conn;
+    }
+  }
+
   private static class FailFastConnectionFactory extends ConnectionFactory {
     private volatile boolean failFast = false;
     private final Set<Connection> factoryTrackedObjects = ConcurrentHashMap.newKeySet();
+    private final InitWrapper wrapper;
 
     public FailFastConnectionFactory(ConnectionFactory.Builder factoryBuilder,
         JedisClientConfig clientConfig) {
-      super(factoryBuilder
-          .connectionBuilder(createCustomConnectionBuilder(factoryBuilder, clientConfig)));
+      this(factoryBuilder, createWrapper(factoryBuilder, clientConfig));
     }
 
-    private static Connection.Builder createCustomConnectionBuilder(
-        ConnectionFactory.Builder factoryBuilder, JedisClientConfig clientConfig) {
-      Connection.Builder connBuilder = factoryBuilder.getCache() == null
-          ? new Connection.Builder() {
+    private FailFastConnectionFactory(ConnectionFactory.Builder factoryBuilder,
+        InitWrapper wrapper) {
+      super(factoryBuilder.connectionBuilder(wrapper));
+      this.wrapper = wrapper;
+    }
+
+    private static InitWrapper createWrapper(ConnectionFactory.Builder factoryBuilder,
+        JedisClientConfig clientConfig) {
+      InitWrapper wrapper = factoryBuilder.getCache() == null ? new InitWrapper()
+          : new InitWrapper() {
             @Override
-            public Connection build() {
-              return createConnection();
-            }
-          }
-          : new CacheConnection.Builder(factoryBuilder.getCache()) {
-            @Override
-            public Connection build() {
-              return createConnection();
+            protected Connection createConnection() {
+              return CacheConnection.builder(factoryBuilder.getCache()).build();
             }
           };
 
-      return connBuilder.socketFactory(factoryBuilder.getJedisSocketFactory())
-          .clientConfig(clientConfig);
+      wrapper.socketFactory(factoryBuilder.getJedisSocketFactory()).clientConfig(clientConfig);
+      return wrapper;
     }
 
     @Override
@@ -60,7 +72,7 @@ public class TrackingConnectionPool extends ConnectionPool {
         PooledObject<Connection> object = super.makeObject();
         factoryTrackedObjects.add(object.getObject());
         try {
-          object.getObject().initializeFromClientConfig();
+          wrapper.initConnection(object.getObject());
         } finally {
           factoryTrackedObjects.remove(object.getObject());
         }
