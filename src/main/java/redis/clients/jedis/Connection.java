@@ -55,8 +55,7 @@ public class Connection implements Closeable {
 
     public Connection build() {
       Connection conn = createConnection();
-      conn.initializeFromClientConfig();
-      return conn;
+      return initialize(conn);
     }
 
     /**
