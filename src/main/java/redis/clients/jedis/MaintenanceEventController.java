@@ -17,6 +17,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import redis.clients.jedis.TimeoutSource.TimeoutInfo;
+import redis.clients.jedis.MaintenanceEvent.FailedOverEvent;
+import redis.clients.jedis.MaintenanceEvent.FailingOverEvent;
+import redis.clients.jedis.MaintenanceEvent.MigratedEvent;
+import redis.clients.jedis.MaintenanceEvent.MigratingEvent;
+import redis.clients.jedis.MaintenanceEvent.MovingEvent;
 
 /**
  * Maintenance handler: owns the shared rebind overlay, the relax-window policy, and the handoff

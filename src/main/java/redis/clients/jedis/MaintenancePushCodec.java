@@ -5,6 +5,11 @@ import java.util.List;
 import java.util.function.Function;
 
 import redis.clients.jedis.util.SafeEncoder;
+import redis.clients.jedis.MaintenanceEvent.FailedOverEvent;
+import redis.clients.jedis.MaintenanceEvent.FailingOverEvent;
+import redis.clients.jedis.MaintenanceEvent.MigratedEvent;
+import redis.clients.jedis.MaintenanceEvent.MigratingEvent;
+import redis.clients.jedis.MaintenanceEvent.MovingEvent;
 
 /**
  * Decodes RESP3 maintenance push frames into {@link MaintenanceEvent}s — the push transport for

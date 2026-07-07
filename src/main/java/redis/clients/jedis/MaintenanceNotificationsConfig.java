@@ -2,6 +2,8 @@ package redis.clients.jedis;
 
 import java.time.Duration;
 
+import redis.clients.jedis.util.JedisAsserts;
+
 public class MaintenanceNotificationsConfig {
 
   /** Default upper bound on the relaxed-timeout window started by MIGRATING/FAILING_OVER/MOVING. */

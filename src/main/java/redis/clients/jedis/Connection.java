@@ -1066,12 +1066,12 @@ public class Connection implements Closeable {
   }
 
   /** Registers a listener notified synchronously of this connection's maintenance events. */
-  void addMaintenanceEventListener(MaintenanceEventListener listener) {
+  public void addMaintenanceEventListener(MaintenanceEventListener listener) {
     maintenanceEventListeners.add(listener);
   }
 
   /** Removes a previously registered maintenance event listener. */
-  void removeMaintenanceEventListener(MaintenanceEventListener listener) {
+  public void removeMaintenanceEventListener(MaintenanceEventListener listener) {
     maintenanceEventListeners.remove(listener);
   }
 

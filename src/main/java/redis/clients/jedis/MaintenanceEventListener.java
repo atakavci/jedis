@@ -1,5 +1,11 @@
 package redis.clients.jedis;
 
+import redis.clients.jedis.MaintenanceEvent.FailedOverEvent;
+import redis.clients.jedis.MaintenanceEvent.FailingOverEvent;
+import redis.clients.jedis.MaintenanceEvent.MigratedEvent;
+import redis.clients.jedis.MaintenanceEvent.MigratingEvent;
+import redis.clients.jedis.MaintenanceEvent.MovingEvent;
+
 /**
  * Typed listener for server maintenance push events. Registered on a {@link Connection} via
  * {@link Connection#addMaintenanceEventListener}; the connection dispatches each parsed event to
@@ -7,7 +13,7 @@ package redis.clients.jedis;
  * listener may mutate the delivering connection (e.g. relax timeouts, request rebind); exceptions
  * propagate to the read loop.
  */
-interface MaintenanceEventListener {
+public interface MaintenanceEventListener {
 
   void onMoving(MovingEvent e, Connection c);
 

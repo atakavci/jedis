@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import redis.clients.jedis.MaintenanceEventController.MaintenanceHandoff;
 import redis.clients.jedis.util.server.TcpMockServer;
+import redis.clients.jedis.MaintenanceEvent.MovingEvent;
 
 /**
  * Unit tests for {@link MaintenanceEventController}: the sequence-guarded, time-bounded MOVING
