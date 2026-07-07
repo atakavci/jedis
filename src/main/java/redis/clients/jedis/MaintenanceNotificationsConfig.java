@@ -139,6 +139,7 @@ public class MaintenanceNotificationsConfig {
     }
 
     public Builder listener(MaintenanceEventListener listener) {
+      JedisAsserts.notNull(listener, "listener must not be null");
       this.listener = listener;
       return this;
     }
@@ -149,7 +150,7 @@ public class MaintenanceNotificationsConfig {
      * lost. Defaults to {@link MaintenanceNotificationsConfig#DEFAULT_RELAXED_WINDOW_MAX_DURATION}.
      */
     public Builder relaxedWindowMaxDuration(Duration duration) {
-      if (duration == null) throw new IllegalArgumentException("duration must not be null");
+     JedisAsserts.notNull(duration, "duration must not be null");
       this.relaxedWindowMaxDuration = duration;
       return this;
     }
