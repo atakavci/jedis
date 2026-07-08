@@ -138,7 +138,7 @@ public class MaintenanceNotificationsConfig {
       return this;
     }
 
-    public Builder listener(MaintenanceEventListener listener) {
+    public Builder eventListener(MaintenanceEventListener listener) {
       JedisAsserts.notNull(listener, "listener must not be null");
       this.listener = listener;
       return this;
