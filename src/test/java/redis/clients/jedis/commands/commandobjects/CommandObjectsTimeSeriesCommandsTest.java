@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import io.redis.test.annotations.ConditionalOnEnv;
 import io.redis.test.annotations.EnabledOnCommand;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import redis.clients.jedis.RedisProtocol;
 import redis.clients.jedis.timeseries.AggregationType;
 import redis.clients.jedis.timeseries.TSAlterParams;
@@ -33,12 +34,20 @@ import redis.clients.jedis.timeseries.TSMRangeElements;
 import redis.clients.jedis.timeseries.TSMRangeParams;
 import redis.clients.jedis.timeseries.TSNRangeParams;
 import redis.clients.jedis.timeseries.TSRangeParams;
+import redis.clients.jedis.util.EnabledOnCommandCondition;
+import redis.clients.jedis.util.RedisVersionCondition;
 import redis.clients.jedis.util.TestEnvUtil;
 
 /**
  * Tests related to <a href="https://redis.io/commands/?group=timeseries">Time series</a> commands.
  */
 public class CommandObjectsTimeSeriesCommandsTest extends CommandObjectsModulesTestBase {
+
+  @RegisterExtension
+  public RedisVersionCondition versionCondition = new RedisVersionCondition(() -> endpoint);
+  @RegisterExtension
+  public EnabledOnCommandCondition enabledOnCommandCondition = new EnabledOnCommandCondition(
+      () -> endpoint);
 
   public CommandObjectsTimeSeriesCommandsTest(RedisProtocol protocol) {
     super(protocol);
