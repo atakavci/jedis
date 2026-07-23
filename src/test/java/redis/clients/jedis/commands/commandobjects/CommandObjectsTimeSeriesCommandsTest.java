@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import io.redis.test.annotations.ConditionalOnEnv;
+import io.redis.test.annotations.EnabledOnCommand;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.RedisProtocol;
 import redis.clients.jedis.timeseries.AggregationType;
@@ -30,6 +31,7 @@ import redis.clients.jedis.timeseries.TSMGetElement;
 import redis.clients.jedis.timeseries.TSMGetParams;
 import redis.clients.jedis.timeseries.TSMRangeElements;
 import redis.clients.jedis.timeseries.TSMRangeParams;
+import redis.clients.jedis.timeseries.TSNRangeParams;
 import redis.clients.jedis.timeseries.TSRangeParams;
 import redis.clients.jedis.util.TestEnvUtil;
 
@@ -290,6 +292,112 @@ public class CommandObjectsTimeSeriesCommandsTest extends CommandObjectsModulesT
     assertThat(elementsByParams.stream().map(TSElement::getValue).collect(Collectors.toList()), contains(
         closeTo(2.0, 0.001),
         closeTo(1.0, 0.001)));
+  }
+
+  @Test
+  @EnabledOnCommand("TS.NRANGE")
+  public void testTsNRange() {
+    String key1 = "{ts}:nrangeA";
+    String key2 = "{ts}:nrangeB";
+    assertThat(exec(commandObjects.tsCreate(key1)), equalTo("OK"));
+    assertThat(exec(commandObjects.tsCreate(key2)), equalTo("OK"));
+
+    // Partly overlapping samples so the pivot produces a NaN cell.
+    exec(commandObjects.tsAdd(key1, 1000L, 10.0));
+    exec(commandObjects.tsAdd(key1, 2000L, 12.0));
+    exec(commandObjects.tsAdd(key2, 1000L, 100.0));
+    exec(commandObjects.tsAdd(key2, 3000L, 300.0));
+
+    String[] keys = { key1, key2 };
+    List<TSElement> rows = exec(commandObjects.tsNRange(keys, 0L, 60000L));
+
+    // Forward order: 1000, 2000, 3000. Each row has one value per key; missing -> NaN.
+    assertThat(rows, hasSize(3));
+    assertThat(rows.stream().map(TSElement::getTimestamp).collect(Collectors.toList()),
+      contains(1000L, 2000L, 3000L));
+    assertThat(rows.get(0).getValues(), contains(closeTo(10.0, 0.001), closeTo(100.0, 0.001)));
+    assertThat(rows.get(1).getValues().get(0), closeTo(12.0, 0.001));
+    assertThat(Double.isNaN(rows.get(1).getValues().get(1)), equalTo(true));
+    assertThat(Double.isNaN(rows.get(2).getValues().get(0)), equalTo(true));
+    assertThat(rows.get(2).getValues().get(1), closeTo(300.0, 0.001));
+
+    // COUNT limits rows after the merge, keeping the lowest timestamps.
+    List<TSElement> limited = exec(commandObjects.tsNRange(keys,
+      TSNRangeParams.nrangeParams(0L, 60000L).count(1)));
+    assertThat(limited, hasSize(1));
+    assertThat(limited.get(0).getTimestamp(), equalTo(1000L));
+  }
+
+  @Test
+  @EnabledOnCommand("TS.NRANGE")
+  public void testTsNRangeAggregation() {
+    String key1 = "{ts}:naggA";
+    String key2 = "{ts}:naggB";
+    assertThat(exec(commandObjects.tsCreate(key1)), equalTo("OK"));
+    assertThat(exec(commandObjects.tsCreate(key2)), equalTo("OK"));
+    exec(commandObjects.tsAdd(key1, 1000L, 10.0));
+    exec(commandObjects.tsAdd(key1, 1500L, 20.0));
+    exec(commandObjects.tsAdd(key2, 1000L, 100.0));
+
+    String[] keys = { key1, key2 };
+
+    // One aggregator per key: key1 -> AVG, key2 -> SUM.
+    List<TSElement> single = exec(commandObjects.tsNRange(keys,
+      TSNRangeParams.nrangeParams(0L, 60000L)
+          .aggregation(new AggregationType[] { AggregationType.AVG, AggregationType.SUM }, 1000L)));
+    assertThat(single.get(0).getValues(), hasSize(2));
+    assertThat(single.get(0).getValues().get(0), closeTo(15.0, 0.001)); // avg(10,20)
+    assertThat(single.get(0).getValues().get(1), closeTo(100.0, 0.001)); // sum(100)
+
+    // Multiple aggregators for key1 (AVG,MAX), one for key2 (SUM): 3 flat value columns.
+    List<TSElement> multi = exec(commandObjects.tsNRange(keys,
+      TSNRangeParams.nrangeParams(0L, 60000L).aggregation(new AggregationType[][] {
+          { AggregationType.AVG, AggregationType.MAX }, { AggregationType.SUM } }, 1000L)));
+    assertThat(multi.get(0).getValues(), hasSize(3));
+    assertThat(multi.get(0).getValues().get(0), closeTo(15.0, 0.001)); // avg key1
+    assertThat(multi.get(0).getValues().get(1), closeTo(20.0, 0.001)); // max key1
+    assertThat(multi.get(0).getValues().get(2), closeTo(100.0, 0.001)); // sum key2
+  }
+
+  @Test
+  @EnabledOnCommand("TS.NREVRANGE")
+  public void testTsNRevRange() {
+    String key1 = "{ts}:nrevA";
+    String key2 = "{ts}:nrevB";
+    assertThat(exec(commandObjects.tsCreate(key1)), equalTo("OK"));
+    assertThat(exec(commandObjects.tsCreate(key2)), equalTo("OK"));
+    exec(commandObjects.tsAdd(key1, 1000L, 10.0));
+    exec(commandObjects.tsAdd(key2, 2000L, 200.0));
+
+    String[] keys = { key1, key2 };
+    List<TSElement> rows = exec(commandObjects.tsNRevRange(keys, 0L, 60000L));
+
+    // Reverse order: 2000 then 1000; server order is preserved (not re-sorted by the client).
+    assertThat(rows.stream().map(TSElement::getTimestamp).collect(Collectors.toList()),
+      contains(2000L, 1000L));
+
+    List<TSElement> byParams = exec(commandObjects.tsNRevRange(keys,
+      TSNRangeParams.nrangeParams(0L, 60000L)));
+    assertThat(byParams.stream().map(TSElement::getTimestamp).collect(Collectors.toList()),
+      contains(2000L, 1000L));
+  }
+
+  @Test
+  @EnabledOnCommand("TS.NRANGE")
+  public void testTsNRangeDuplicateKeysPreserved() {
+    String key = "{ts}:ndup";
+    assertThat(exec(commandObjects.tsCreate(key)), equalTo("OK"));
+    exec(commandObjects.tsAdd(key, 1000L, 5.0));
+    exec(commandObjects.tsAdd(key, 1500L, 9.0));
+
+    // Same key twice with different aggregators -> two value columns for one physical series.
+    String[] keys = { key, key };
+    List<TSElement> rows = exec(commandObjects.tsNRange(keys,
+      TSNRangeParams.nrangeParams(0L, 60000L)
+          .aggregation(new AggregationType[] { AggregationType.MIN, AggregationType.MAX }, 1000L)));
+    assertThat(rows.get(0).getValues(), hasSize(2));
+    assertThat(rows.get(0).getValues().get(0), closeTo(5.0, 0.001)); // min
+    assertThat(rows.get(0).getValues().get(1), closeTo(9.0, 0.001)); // max
   }
 
   @Test

@@ -4671,6 +4671,30 @@ public class CommandObjects {
         .addParams(rangeParams), TimeSeriesBuilderFactory.TIMESERIES_ELEMENT_LIST);
   }
 
+  public final CommandObject<List<TSElement>> tsNRange(String[] keys, long fromTimestamp, long toTimestamp) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.NRANGE).add(keys.length)
+        .keys((Object[]) keys).add(fromTimestamp).add(toTimestamp),
+        TimeSeriesBuilderFactory.TIMESERIES_PIVOT_ELEMENT_LIST);
+  }
+
+  public final CommandObject<List<TSElement>> tsNRange(String[] keys, TSNRangeParams nrangeParams) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.NRANGE).add(keys.length)
+        .keys((Object[]) keys).addParams(nrangeParams),
+        TimeSeriesBuilderFactory.TIMESERIES_PIVOT_ELEMENT_LIST);
+  }
+
+  public final CommandObject<List<TSElement>> tsNRevRange(String[] keys, long fromTimestamp, long toTimestamp) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.NREVRANGE).add(keys.length)
+        .keys((Object[]) keys).add(fromTimestamp).add(toTimestamp),
+        TimeSeriesBuilderFactory.TIMESERIES_PIVOT_ELEMENT_LIST);
+  }
+
+  public final CommandObject<List<TSElement>> tsNRevRange(String[] keys, TSNRangeParams nrangeParams) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.NREVRANGE).add(keys.length)
+        .keys((Object[]) keys).addParams(nrangeParams),
+        TimeSeriesBuilderFactory.TIMESERIES_PIVOT_ELEMENT_LIST);
+  }
+
   public final CommandObject<Map<String, TSMRangeElements>> tsMRange(long fromTimestamp, long toTimestamp, String... filters) {
     return new CommandObject<>(commandArguments(TimeSeriesCommand.MRANGE).add(fromTimestamp)
         .add(toTimestamp).add(TimeSeriesKeyword.FILTER).addObjects((Object[]) filters),

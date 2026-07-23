@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static redis.clients.jedis.util.AssertUtil.assertEqualsByProtocol;
@@ -12,6 +13,7 @@ import static redis.clients.jedis.util.AssertUtil.assertEqualsByProtocol;
 import java.util.*;
 
 import io.redis.test.annotations.ConditionalOnEnv;
+import io.redis.test.annotations.EnabledOnCommand;
 import io.redis.test.annotations.SinceRedisVersion;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -1575,5 +1577,116 @@ public abstract class TimeSeriesCommandsTestBase extends UnifiedJedisCommandsTes
         .filter("kind=mrevrange-multi-no-match"));
     assertNotNull(revRanges);
     assertTrue(revRanges.isEmpty());
+  }
+
+  /**
+   * TS.NRANGE pivots an explicit key list by timestamp: forward order, one value column per key,
+   * NaN where a key has no sample. COUNT limits rows after the merge.
+   */
+  @Test
+  @EnabledOnCommand("TS.NRANGE")
+  public void nRange() {
+    jedis.tsCreate("{nr}:a");
+    jedis.tsCreate("{nr}:b");
+    jedis.tsAdd("{nr}:a", 1000L, 10.0);
+    jedis.tsAdd("{nr}:a", 2000L, 12.0);
+    jedis.tsAdd("{nr}:b", 1000L, 100.0);
+    jedis.tsAdd("{nr}:b", 3000L, 300.0);
+
+    String[] keys = { "{nr}:a", "{nr}:b" };
+    List<TSElement> rows = jedis.tsNRange(keys, 0L, 60000L);
+
+    List<Long> timestamps = new ArrayList<>();
+    for (TSElement row : rows) {
+      timestamps.add(row.getTimestamp());
+    }
+    assertEquals(Arrays.asList(1000L, 2000L, 3000L), timestamps);
+
+    assertEquals(2, rows.get(0).getValues().size());
+    assertEquals(10.0, rows.get(0).getValues().get(0), 0.001);
+    assertEquals(100.0, rows.get(0).getValues().get(1), 0.001);
+    assertEquals(12.0, rows.get(1).getValues().get(0), 0.001);
+    assertTrue(Double.isNaN(rows.get(1).getValues().get(1)));
+    assertTrue(Double.isNaN(rows.get(2).getValues().get(0)));
+    assertEquals(300.0, rows.get(2).getValues().get(1), 0.001);
+
+    List<TSElement> limited = jedis.tsNRange(keys,
+      TSNRangeParams.nrangeParams(0L, 60000L).count(1));
+    assertEquals(1, limited.size());
+    assertEquals(1000L, limited.get(0).getTimestamp());
+
+    List<TSElement> emptyRange = jedis.tsNRange(new String[] { "{nr}:a" }, 900000L, 900001L);
+    assertTrue(emptyRange.isEmpty());
+  }
+
+  /**
+   * TS.NREVRANGE returns the same pivot rows in decreasing-timestamp order; the client preserves
+   * the server order.
+   */
+  @Test
+  @EnabledOnCommand("TS.NREVRANGE")
+  public void nRevRange() {
+    jedis.tsCreate("{nrr}:a");
+    jedis.tsCreate("{nrr}:b");
+    jedis.tsAdd("{nrr}:a", 1000L, 10.0);
+    jedis.tsAdd("{nrr}:b", 2000L, 200.0);
+
+    String[] keys = { "{nrr}:a", "{nrr}:b" };
+    List<TSElement> rows = jedis.tsNRevRange(keys, 0L, 60000L);
+
+    List<Long> timestamps = new ArrayList<>();
+    for (TSElement row : rows) {
+      timestamps.add(row.getTimestamp());
+    }
+    assertEquals(Arrays.asList(2000L, 1000L), timestamps);
+  }
+
+  /**
+   * Aggregation mode: one aggregator token per key (count must equal numkeys), each token possibly
+   * a comma-separated list, producing a flat value vector per row.
+   */
+  @Test
+  @EnabledOnCommand("TS.NRANGE")
+  public void nRangeAggregation() {
+    jedis.tsCreate("{nra}:a");
+    jedis.tsCreate("{nra}:b");
+    jedis.tsAdd("{nra}:a", 1000L, 10.0);
+    jedis.tsAdd("{nra}:a", 1500L, 20.0);
+    jedis.tsAdd("{nra}:b", 1000L, 100.0);
+
+    String[] keys = { "{nra}:a", "{nra}:b" };
+
+    List<TSElement> single = jedis.tsNRange(keys, TSNRangeParams.nrangeParams(0L, 60000L)
+        .aggregation(new AggregationType[] { AggregationType.AVG, AggregationType.SUM }, 1000L));
+    assertEquals(2, single.get(0).getValues().size());
+    assertEquals(15.0, single.get(0).getValues().get(0), 0.001);
+    assertEquals(100.0, single.get(0).getValues().get(1), 0.001);
+
+    List<TSElement> multi = jedis.tsNRange(keys,
+      TSNRangeParams.nrangeParams(0L, 60000L).aggregation(new AggregationType[][] {
+          { AggregationType.AVG, AggregationType.MAX }, { AggregationType.SUM } },
+        1000L));
+    assertEquals(3, multi.get(0).getValues().size());
+    assertEquals(15.0, multi.get(0).getValues().get(0), 0.001);
+    assertEquals(20.0, multi.get(0).getValues().get(1), 0.001);
+    assertEquals(100.0, multi.get(0).getValues().get(2), 0.001);
+  }
+
+  /**
+   * A mismatch between the number of aggregator tokens and numkeys is rejected by the server; the
+   * client does not pre-validate.
+   */
+  @Test
+  @EnabledOnCommand("TS.NRANGE")
+  public void nRangeAggregatorCountMismatchRejected() {
+    jedis.tsCreate("{nrm}:a");
+    jedis.tsCreate("{nrm}:b");
+    jedis.tsAdd("{nrm}:a", 1000L, 10.0);
+    jedis.tsAdd("{nrm}:b", 1000L, 20.0);
+
+    String[] keys = { "{nrm}:a", "{nrm}:b" };
+    assertThrows(JedisDataException.class,
+      () -> jedis.tsNRange(keys, TSNRangeParams.nrangeParams(0L, 60000L)
+          .aggregation(new AggregationType[] { AggregationType.AVG }, 1000L)));
   }
 }

@@ -3,6 +3,7 @@ package redis.clients.jedis.timeseries;
 import java.util.List;
 import java.util.Map;
 import redis.clients.jedis.Response;
+import redis.clients.jedis.annots.Experimental;
 
 public interface RedisTimeSeriesPipelineCommands {
 
@@ -44,6 +45,34 @@ public interface RedisTimeSeriesPipelineCommands {
   Response<List<TSElement>> tsRevRange(String key, long fromTimestamp, long toTimestamp);
 
   Response<List<TSElement>> tsRevRange(String key, TSRangeParams rangeParams);
+
+  /**
+   * Pipeline variant of {@link RedisTimeSeriesCommands#tsNRange(String[], long, long)}.
+   * @since 8.0
+   */
+  @Experimental
+  Response<List<TSElement>> tsNRange(String[] keys, long fromTimestamp, long toTimestamp);
+
+  /**
+   * Pipeline variant of {@link RedisTimeSeriesCommands#tsNRange(String[], TSNRangeParams)}.
+   * @since 8.0
+   */
+  @Experimental
+  Response<List<TSElement>> tsNRange(String[] keys, TSNRangeParams nrangeParams);
+
+  /**
+   * Pipeline variant of {@link RedisTimeSeriesCommands#tsNRevRange(String[], long, long)}.
+   * @since 8.0
+   */
+  @Experimental
+  Response<List<TSElement>> tsNRevRange(String[] keys, long fromTimestamp, long toTimestamp);
+
+  /**
+   * Pipeline variant of {@link RedisTimeSeriesCommands#tsNRevRange(String[], TSNRangeParams)}.
+   * @since 8.0
+   */
+  @Experimental
+  Response<List<TSElement>> tsNRevRange(String[] keys, TSNRangeParams nrangeParams);
 
   Response<Map<String, TSMRangeElements>> tsMRange(long fromTimestamp, long toTimestamp, String... filters);
 
