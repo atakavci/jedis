@@ -724,6 +724,63 @@ public abstract class TimeSeriesCommandsTestBase extends UnifiedJedisCommandsTes
     assertEquals(Arrays.asList("seriesQueryIndex2"), jedis.tsQueryIndex("l2=v22"));
   }
 
+  /**
+   * Sets up a small sensor dashboard dataset used by the TS.QUERYLABELS examples. Keys are
+   * hash-tagged so they share a slot in cluster mode (the command itself is keyless).
+   */
+  private void setupQueryLabelsSeries() {
+    jedis.tsCreate("{ql}temp:living", TSCreateParams.createParams()
+        .labels(mapOf("type", "sensor", "sensortype", "temperature", "location", "LivingRoom")));
+    jedis.tsCreate("{ql}temp:kitchen", TSCreateParams.createParams()
+        .labels(mapOf("type", "sensor", "sensortype", "temperature", "location", "Kitchen")));
+    jedis.tsCreate("{ql}hum:bedroom", TSCreateParams.createParams()
+        .labels(mapOf("type", "sensor", "sensortype", "humidity", "location", "BedRoom")));
+    jedis.tsCreate("{ql}cpu:server",
+      TSCreateParams.createParams().labels(mapOf("type", "metric", "unit", "percent")));
+  }
+
+  private static Map<String, String> mapOf(String... kvs) {
+    Map<String, String> map = new HashMap<>();
+    for (int i = 0; i < kvs.length; i += 2) {
+      map.put(kvs[i], kvs[i + 1]);
+    }
+    return map;
+  }
+
+  @Test
+  @SinceRedisVersion("8.9.241")
+  public void testQueryLabels() {
+    setupQueryLabelsSeries();
+
+    // LABELS with a filter: distinct label names across the sensor group (unordered set).
+    assertEquals(new HashSet<>(Arrays.asList("type", "sensortype", "location")),
+      new HashSet<>(jedis.tsQueryLabels("type=sensor")));
+
+    // LABELS without a filter: metadata across all indexed series, so "unit" appears too.
+    assertEquals(new HashSet<>(Arrays.asList("type", "sensortype", "location", "unit")),
+      new HashSet<>(jedis.tsQueryLabels()));
+
+    // A filter matching nothing yields an empty reply, not an error.
+    assertEquals(Collections.emptyList(), jedis.tsQueryLabels("type=nonexistent"));
+  }
+
+  @Test
+  @SinceRedisVersion("8.9.241")
+  public void testQueryLabelValues() {
+    setupQueryLabelsSeries();
+
+    // VALUES of a chosen label within the sensor group (unordered set).
+    assertEquals(new HashSet<>(Arrays.asList("LivingRoom", "Kitchen", "BedRoom")),
+      new HashSet<>(jedis.tsQueryLabelValues("location", "type=sensor")));
+
+    // VALUES without a filter: collected across all indexed series.
+    assertEquals(new HashSet<>(Arrays.asList("temperature", "humidity")),
+      new HashSet<>(jedis.tsQueryLabelValues("sensortype")));
+
+    // A label carried by no matching series yields an empty reply, not an error.
+    assertEquals(Collections.emptyList(), jedis.tsQueryLabelValues("nonexistent", "type=sensor"));
+  }
+
   @Test
   public void testInfo() {
     Map<String, String> labels = new HashMap<>();

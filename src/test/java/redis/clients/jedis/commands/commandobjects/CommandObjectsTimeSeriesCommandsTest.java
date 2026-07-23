@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import io.redis.test.annotations.ConditionalOnEnv;
+import io.redis.test.annotations.SinceRedisVersion;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.RedisProtocol;
 import redis.clients.jedis.timeseries.AggregationType;
@@ -579,6 +580,34 @@ public class CommandObjectsTimeSeriesCommandsTest extends CommandObjectsModulesT
     List<String> matchingKeys = exec(commandObjects.tsQueryIndex(filters));
 
     assertThat(matchingKeys, containsInAnyOrder(key1, key2));
+  }
+
+  @Test
+  @SinceRedisVersion("8.9.241")
+  public void testTsQueryLabelsAndValues() {
+    exec(commandObjects.tsCreate("ql:temp:living",
+        new TSCreateParams().label("type", "sensor").label("sensortype", "temperature").label("location", "LivingRoom")));
+    exec(commandObjects.tsCreate("ql:temp:kitchen",
+        new TSCreateParams().label("type", "sensor").label("sensortype", "temperature").label("location", "Kitchen")));
+    exec(commandObjects.tsCreate("ql:hum:bedroom",
+        new TSCreateParams().label("type", "sensor").label("sensortype", "humidity").label("location", "BedRoom")));
+    exec(commandObjects.tsCreate("ql:cpu:server",
+        new TSCreateParams().label("type", "metric").label("unit", "percent")));
+
+    // LABELS with a filter: distinct label names across the sensor group.
+    assertThat(exec(commandObjects.tsQueryLabels("type=sensor")),
+        containsInAnyOrder("type", "sensortype", "location"));
+
+    // LABELS without a filter: all indexed series, so "unit" appears too.
+    assertThat(exec(commandObjects.tsQueryLabels()),
+        containsInAnyOrder("type", "sensortype", "location", "unit"));
+
+    // VALUES of a chosen label within the sensor group.
+    assertThat(exec(commandObjects.tsQueryLabelValues("location", "type=sensor")),
+        containsInAnyOrder("LivingRoom", "Kitchen", "BedRoom"));
+
+    // A label carried by no matching series yields an empty reply, not an error.
+    assertThat(exec(commandObjects.tsQueryLabelValues("nonexistent", "type=sensor")), empty());
   }
 
   @Test
