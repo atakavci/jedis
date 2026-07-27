@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static io.redis.test.utils.RedisVersion.V8_10_0_RC2_STRING;
 import static org.junit.jupiter.api.Assertions.fail;
 import static redis.clients.jedis.util.AssertUtil.assertEqualsByProtocol;
 
@@ -1614,7 +1615,7 @@ public abstract class TimeSeriesCommandsTestBase extends UnifiedJedisCommandsTes
    * option is what makes the difference (R.1, NF.3).
    */
   @Test
-  @SinceRedisVersion(value = "8.9.241", message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
+  @SinceRedisVersion(value = V8_10_0_RC2_STRING, message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
   public void mRangeExcludeEmpty() {
     setupExcludeEmptySeries();
 
@@ -1643,7 +1644,7 @@ public abstract class TimeSeriesCommandsTestBase extends UnifiedJedisCommandsTes
    * for the series that remain (R.1, R.3).
    */
   @Test
-  @SinceRedisVersion(value = "8.9.241", message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
+  @SinceRedisVersion(value = V8_10_0_RC2_STRING, message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
   public void mRevRangeExcludeEmpty() {
     setupExcludeEmptySeries();
 
@@ -1662,7 +1663,7 @@ public abstract class TimeSeriesCommandsTestBase extends UnifiedJedisCommandsTes
    * requested range and aggregation is omitted (R.5, NF.2).
    */
   @Test
-  @SinceRedisVersion(value = "8.9.241", message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
+  @SinceRedisVersion(value = V8_10_0_RC2_STRING, message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
   public void mRangeExcludeEmptyWithAggregation() {
     setupExcludeEmptySeries();
 
@@ -1677,7 +1678,7 @@ public abstract class TimeSeriesCommandsTestBase extends UnifiedJedisCommandsTes
    * When every matching series is empty, EXCLUDEEMPTY yields an empty top-level reply (R.3).
    */
   @Test
-  @SinceRedisVersion(value = "8.9.241", message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
+  @SinceRedisVersion(value = V8_10_0_RC2_STRING, message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
   public void mRangeExcludeEmptyAllEmpty() {
     setupExcludeEmptySeries();
 
@@ -1703,7 +1704,7 @@ public abstract class TimeSeriesCommandsTestBase extends UnifiedJedisCommandsTes
    * error propagated as-is (R.4, R.6).
    */
   @Test
-  @SinceRedisVersion(value = "8.9.241", message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
+  @SinceRedisVersion(value = V8_10_0_RC2_STRING, message = "Requires RedisTimeSeries EXCLUDEEMPTY support for TS.MRANGE / TS.MREVRANGE.")
   public void rawMRangeExcludeEmptyWithGroupByPropagatesServerError() {
     setupExcludeEmptySeries();
 
