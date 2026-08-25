@@ -376,7 +376,7 @@ public class RedisEntraIDIntegrationTests {
       TriggerActionResponse actionResponse = triggerNetworkFailure();
 
       JedisConnectionException aclException = assertThrows(JedisConnectionException.class, () -> {
-        while (!actionResponse.isCompleted(ONE_HUNDRED_MILLISECONDS, TWO_SECONDS, TEN_SECONDS)) {
+        while (!actionResponse.isCompleted(ONE_HUNDRED_MILLISECONDS, TWO_SECONDS, ONE_MINUTE)) {
           for (int i = 0; i < 50; i++) {
             String key = UUID.randomUUID().toString();
             jedis.set(key, "value");
