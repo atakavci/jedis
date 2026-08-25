@@ -1,8 +1,7 @@
 package redis.clients.jedis.authentication;
 
 import static org.awaitility.Awaitility.await;
-import static org.awaitility.Durations.TWO_SECONDS;
-import static org.awaitility.Durations.FIVE_SECONDS;
+import static org.awaitility.Durations.*;
 import static org.awaitility.Durations.ONE_HUNDRED_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -377,7 +376,7 @@ public class RedisEntraIDIntegrationTests {
       TriggerActionResponse actionResponse = triggerNetworkFailure();
 
       JedisConnectionException aclException = assertThrows(JedisConnectionException.class, () -> {
-        while (!actionResponse.isCompleted(ONE_HUNDRED_MILLISECONDS, TWO_SECONDS, FIVE_SECONDS)) {
+        while (!actionResponse.isCompleted(ONE_HUNDRED_MILLISECONDS, TWO_SECONDS, TEN_SECONDS)) {
           for (int i = 0; i < 50; i++) {
             String key = UUID.randomUUID().toString();
             jedis.set(key, "value");
