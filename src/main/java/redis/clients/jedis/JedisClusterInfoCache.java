@@ -365,6 +365,51 @@ public class JedisClusterInfoCache {
     }
   }
 
+  /**
+   * Applies an SMIGRATED slot delta atomically and reports which source nodes are left serving no
+   * slots. Under a SINGLE write-lock hold: provisions each destination node's pool
+   * ({@link #setupNodeIfNotExist}) and reassigns the entry's slots, then scans residual ownership
+   * for every distinct source. The single hold is a correctness requirement — applying and
+   * scanning in separate acquisitions leaves an interleaving window against
+   * {@link #renewClusterSlots}. Holds no event state; dedup of the broadcast is the caller's job.
+   * @return the source nodes that no longer own any slot (candidates for connection retirement);
+   *         their pools stay in place — removal belongs to the full-refresh dead-pool cleanup
+   */
+  Set<HostAndPort> applyMigrationDelta(List<SlotMigration> migrations) {
+    w.lock();
+    try {
+      for (SlotMigration migration : migrations) {
+        ConnectionPool destPool = setupNodeIfNotExist(migration.dest);
+        primaryNodesCache.put(getNodeKey(migration.dest), destPool);
+        migration.slots.forEachSlot(slot -> {
+          slots[slot] = destPool;
+          slotNodes[slot] = migration.dest;
+          if (replicaSlots != null) {
+            // the delta carries no replica placement; drop stale entries until the next refresh
+            replicaSlots[slot] = null;
+          }
+        });
+      }
+
+      Set<HostAndPort> slotless = new HashSet<>();
+      for (SlotMigration migration : migrations) {
+        slotless.add(migration.src);
+      }
+      for (int slot = 0; slot < slotNodes.length && !slotless.isEmpty(); slot++) {
+        if (slotNodes[slot] != null) {
+          slotless.remove(slotNodes[slot]);
+        }
+      }
+      // a slotless node is no longer a primary: keep broadcast/random selection off it
+      for (HostAndPort node : slotless) {
+        primaryNodesCache.remove(getNodeKey(node));
+      }
+      return slotless;
+    } finally {
+      w.unlock();
+    }
+  }
+
   public void assignSlotsToReplicaNode(List<Integer> targetSlots, HostAndPort targetNode) {
     w.lock();
     try {
