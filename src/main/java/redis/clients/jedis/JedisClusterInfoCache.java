@@ -47,7 +47,10 @@ public class JedisClusterInfoCache {
   private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
   private final Lock r = rwl.readLock();
   private final Lock w = rwl.writeLock();
-  private final Lock rediscoverLock = new ReentrantLock();
+  private final ReentrantLock rediscoverLock = new ReentrantLock();
+
+  /** Notified after every {@link #renewClusterSlots} attempt completes; see the cluster coordinator. */
+  private volatile Runnable postRefreshHook;
 
   private final GenericObjectPoolConfig<Connection> poolConfig;
   private final JedisClientConfig clientConfig;
@@ -232,8 +235,26 @@ public class JedisClusterInfoCache {
 
       } finally {
         rediscoverLock.unlock();
+        Runnable hook = postRefreshHook;
+        if (hook != null) {
+          hook.run();
+        }
       }
     }
+  }
+
+  /** True while a full topology refresh ({@link #renewClusterSlots}) is running. */
+  boolean isRenewInFlight() {
+    return rediscoverLock.isLocked();
+  }
+
+  /**
+   * Installs the hook run after every full-refresh attempt completes (successful or not), outside
+   * the rediscover lock. Single consumer: the cluster maintenance coordinator drains its queued
+   * slot deltas here.
+   */
+  void setPostRefreshHook(Runnable hook) {
+    this.postRefreshHook = hook;
   }
 
   private void discoverClusterSlots(Connection jedis) {
