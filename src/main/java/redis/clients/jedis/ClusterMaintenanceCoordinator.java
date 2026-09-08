@@ -19,8 +19,8 @@ import redis.clients.jedis.TimeoutSource.TimeoutInfo;
  * the last one closes, and a connection created mid-event relaxes from the moment its overlay is
  * installed. On SMIGRATED it applies the slot delta atomically through
  * {@link JedisClusterInfoCache#applyMigrationDelta} — queued and drained after completion when a
- * full topology refresh is in flight, never blocking a read thread — and retires the connections
- * of nodes left without slots via each pool's own {@link MaintenanceEventController}, resolved at
+ * full topology refresh is in flight, never blocking a read thread — and retires the connections of
+ * nodes left without slots via each pool's own {@link MaintenanceEventController}, resolved at
  * event time (no node map here). The pools remain their controllers' sole owners; this class only
  * calls.
  */
@@ -61,15 +61,14 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
     if (operations.isEmpty()) {
       return false;
     }
-    boolean active = false;
     for (MigrationOperation op : operations.values()) {
       if (op.isExpired()) {
         operations.remove(op.id, op);
-      } else if (!op.closed) {
-        active = true;
+      } else if (op.isMigrating()) {
+        return true;
       }
     }
-    return active;
+    return false;
   }
 
   @Override
@@ -79,7 +78,7 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
         c.toIdentityString());
     }
     long deadline = NanoClock.INSTANCE.getAsLong() + maxRelaxedDurationNanos;
-    operations.computeIfAbsent(e.identity(), k -> new MigrationOperation(k, deadline));
+    operations.computeIfAbsent(e.identity(), k -> new MigrationOperation(k, e.seq, deadline, true));
     c.applyCurrentTimeout(); // the gate just opened; push the relax to the receiving socket now
   }
 
@@ -91,14 +90,11 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
       if (cur == null) {
         // SMIGRATED without a preceding SMIGRATING (e.g. connected mid-event): still applied
         firstDelivery[0] = true;
-        return MigrationOperation.closed(k, deadline);
-      }
-      if (!cur.closed) {
-        firstDelivery[0] = true;
-        return cur.close();
+        return new MigrationOperation(k, e.seq, deadline, false);
       }
       return cur; // duplicate broadcast delivery; retained to absorb the rest
     });
+    discardOutdatedMigrationWindows(e.seq);
     c.applyCurrentTimeout(); // unrelax the receiving socket if the gate just shut
     if (!firstDelivery[0]) {
       return;
@@ -115,6 +111,26 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
       return;
     }
     applyDelta(e);
+  }
+
+  /**
+   * Seq ids are ordered and an opening/closing pair shares one, so a closing SMIGRATED also
+   * concludes any operation opened under a lower seq whose own SMIGRATED never arrived (lost or
+   * reordered) — the stale opener must not keep the relax gate held. A cancelled entry behaves like
+   * a closed one: it is retained until its TTL, so a late lower-seq SMIGRATED is absorbed as a
+   * duplicate rather than applying an out-of-order delta (the MOVED fallback self-heals the
+   * topology if that loses one).
+   */
+  private void discardOutdatedMigrationWindows(long closingSeq) {
+    for (MigrationOperation op : operations.values()) {
+      if (op.seq < closingSeq) {
+        operations.remove(op.id, op); // best-effort: a racing delivery may have already replaced it
+        if (logger.isDebugEnabled()) {
+          logger.debug("Discarding stale migration window (seq={}) on closing seq={}", op.seq,
+            closingSeq);
+        }
+      }
+    }
   }
 
   private void drainPendingDeltas() {
@@ -151,29 +167,23 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
   /** One client-wide migration operation, folded from the per-node broadcast; keyed by seq. */
   private static final class MigrationOperation {
     final Object id;
+    final long seq;
     final long deadlineNanos;
-    final boolean closed;
+    final boolean isMigrating;
 
-    private MigrationOperation(Object id, long deadlineNanos, boolean closed) {
+    private MigrationOperation(Object id, long seq, long deadlineNanos, boolean isMigrating) {
       this.id = id;
+      this.seq = seq;
       this.deadlineNanos = deadlineNanos;
-      this.closed = closed;
-    }
-
-    MigrationOperation(Object id, long deadlineNanos) {
-      this(id, deadlineNanos, false);
-    }
-
-    static MigrationOperation closed(Object id, long deadlineNanos) {
-      return new MigrationOperation(id, deadlineNanos, true);
-    }
-
-    MigrationOperation close() {
-      return new MigrationOperation(id, deadlineNanos, true);
+      this.isMigrating = isMigrating;
     }
 
     boolean isExpired() {
       return deadlineNanos - NanoClock.INSTANCE.getAsLong() <= 0;
+    }
+
+    boolean isMigrating() {
+      return isMigrating;
     }
   }
 
