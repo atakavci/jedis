@@ -14,23 +14,23 @@ import redis.clients.jedis.TimeoutSource.TimeoutInfo;
  * N-connection broadcast into one client-wide operation and (b) drives the shared relax gate:
  * timeouts stay relaxed while ANY operation is open, so overlapping migrations unrelax only when
  * the last one closes, and a connection created mid-event relaxes from the moment its overlay is
- * installed. On SMIGRATED it hands the slot delta to
- * {@link JedisClusterInfoCache#applyMigrationDelta}, which queues and applies it atomically
- * against the refresh lifecycle (never blocking a read thread), then — once the delta is really
- * applied — retires the connections of nodes left without slots via each pool's own
- * {@link MaintenanceEventController}, resolved at reaction time (no node map here). The pools
- * remain their controllers' sole owners; this class only calls.
+ * installed. On the first SMIGRATED delivery it hands the slot delta to
+ * {@link JedisClusterInfoCache#applySlotMigration}, which queues and applies it atomically
+ * against the refresh lifecycle — never blocking or spinning a read thread on a running refresh.
  */
 final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
 
   private static final Logger logger = LoggerFactory.getLogger(ClusterMaintenanceCoordinator.class);
 
   private final JedisClusterInfoCache cache;
-  /** Backstop for an SMIGRATING whose SMIGRATED is lost, and retention of closed entries. */
+  /** Backstop for an SMIGRATING whose SMIGRATED is lost, and retention of concluded entries. */
   private final long maxRelaxedDurationNanos;
   private final Supplier<TimeoutInfo> timeoutSupplier;
 
-  /** Seq-keyed operations: open entries gate the relax; closed entries absorb late duplicates. */
+  /**
+   * Seq-keyed operations: migrating (SMIGRATING) entries gate the relax; non-migrating (SMIGRATED)
+   * entries absorb the remaining broadcast duplicates until their TTL.
+   */
   private final ConcurrentHashMap<Object, MigrationOperation> operations = new ConcurrentHashMap<>();
 
   ClusterMaintenanceCoordinator(JedisClusterInfoCache cache,
@@ -93,18 +93,16 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
       return;
     }
     logger.debug("Slot migration done (seq={}, entries={})", e.seq, e.migrations.size());
-    // the cache queues and applies atomically against its refresh lifecycle; the reaction fires
-    // once the delta is really applied, possibly on a later drainer's thread
-    cache.applyMigrationDelta(e.migrations);
+    // the cache queues and applies atomically against its refresh lifecycle; a delta racing a
+    // refresh may be applied later, on the refreshing/draining thread
+    cache.applySlotMigration(e.migrations);
   }
 
   /**
-   * Seq ids are ordered and an opening/closing pair shares one, so a closing SMIGRATED also
-   * concludes any operation opened under a lower seq whose own SMIGRATED never arrived (lost or
-   * reordered) — the stale opener must not keep the relax gate held. A cancelled entry behaves like
-   * a closed one: it is retained until its TTL, so a late lower-seq SMIGRATED is absorbed as a
-   * duplicate rather than applying an out-of-order delta (the MOVED fallback self-heals the
-   * topology if that loses one).
+   * Seq ids are ordered, so a closing SMIGRATED also concludes any operation opened under a lower
+   * seq whose own SMIGRATED never arrived (lost or reordered) — the stale opener must not keep the
+   * relax gate held. Discarded entries are removed outright; a late lower-seq SMIGRATED would then
+   * re-apply as a fresh delta (the MOVED fallback self-heals the topology if it was stale).
    */
   private void discardOutdatedMigrationWindows(long closingSeq) {
     for (MigrationOperation op : operations.values()) {
