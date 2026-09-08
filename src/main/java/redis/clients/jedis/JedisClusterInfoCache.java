@@ -13,6 +13,7 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -49,8 +50,12 @@ public class JedisClusterInfoCache {
   private final Lock w = rwl.writeLock();
   private final ReentrantLock rediscoverLock = new ReentrantLock();
 
-  /** Notified after every {@link #renewClusterSlots} attempt completes; see the cluster coordinator. */
-  private volatile Runnable postRefreshHook;
+  /**
+   * SMIGRATED slot deltas awaiting application. Deltas only ever apply under
+   * {@link #rediscoverLock} (see {@link #drainMigrationDeltas}), so they can never interleave with
+   * — and always order after — a full topology refresh.
+   */
+  private final ConcurrentLinkedQueue<PendingMigrationDelta> pendingMigrationDeltas = new ConcurrentLinkedQueue<>();
 
   private final GenericObjectPoolConfig<Connection> poolConfig;
   private final JedisClientConfig clientConfig;
@@ -132,7 +137,7 @@ public class JedisClusterInfoCache {
   private boolean checkClusterSlotSequence(List<Object> slotsInfo) {
     List<Integer> slots = new ArrayList<>();
     for (Object slotInfoObj : slotsInfo) {
-      List<Object> slotInfo = (List<Object>)slotInfoObj;
+      List<Object> slotInfo = (List<Object>) slotInfoObj;
       slots.addAll(getAssignedSlotArray(slotInfo));
     }
     Collections.sort(slots);
@@ -235,26 +240,11 @@ public class JedisClusterInfoCache {
 
       } finally {
         rediscoverLock.unlock();
-        Runnable hook = postRefreshHook;
-        if (hook != null) {
-          hook.run();
-        }
       }
+      // deltas that arrived while this refresh held the lock could not drain; drain them now,
+      // ordered after the refreshed topology
+      drainMigrationDeltas();
     }
-  }
-
-  /** True while a full topology refresh ({@link #renewClusterSlots}) is running. */
-  boolean isRenewInFlight() {
-    return rediscoverLock.isLocked();
-  }
-
-  /**
-   * Installs the hook run after every full-refresh attempt completes (successful or not), outside
-   * the rediscover lock. Single consumer: the cluster maintenance coordinator drains its queued
-   * slot deltas here.
-   */
-  void setPostRefreshHook(Runnable hook) {
-    this.postRefreshHook = hook;
   }
 
   private void discoverClusterSlots(Connection jedis) {
@@ -387,16 +377,62 @@ public class JedisClusterInfoCache {
   }
 
   /**
+   * Queues an SMIGRATED slot delta and drains the queue if no full topology refresh is in flight.
+   * Enqueue-then-drain against {@link #rediscoverLock} makes the check atomic: deltas only ever
+   * apply while holding the lock, so a delta can neither interleave with a running refresh nor race
+   * ahead of it — a refresh drains whatever queued behind it as its own last step. Never blocks the
+   * calling (read) thread on a running refresh. {@code onSlotless} receives the source nodes the
+   * delta left without any slot (invoked outside all cache locks, possibly on a later drainer's
+   * thread); dedup of the broadcast is the caller's job.
+   */
+  void applyMigrationDelta(List<SlotMigration> migrations) {
+    pendingMigrationDeltas.add(new PendingMigrationDelta(migrations));
+    drainMigrationDeltas();
+  }
+
+  /**
+   * Applies queued deltas while the rediscover lock is free; a failed {@code tryLock} means the
+   * holder — a running refresh or another drainer — drains as its last step. Re-checks after
+   * unlocking so an enqueue that slipped in during the drain is never stranded. Reactions run after
+   * unlock: no caller code executes under cache locks.
+   */
+  private void drainMigrationDeltas() {
+    while (!pendingMigrationDeltas.isEmpty()) {
+      if (!rediscoverLock.tryLock()) {
+        return;
+      }
+      try {
+        PendingMigrationDelta delta;
+        while ((delta = pendingMigrationDeltas.poll()) != null) {
+          applySlotMigration(delta.migrations);
+        }
+      } finally {
+        rediscoverLock.unlock();
+      }
+
+    }
+  }
+
+  /** An SMIGRATED delta awaiting application, with the caller's retirement reaction. */
+  private static final class PendingMigrationDelta {
+    final List<SlotMigration> migrations;
+
+    PendingMigrationDelta(List<SlotMigration> migrations) {
+      this.migrations = migrations;
+    }
+  }
+
+  /**
    * Applies an SMIGRATED slot delta atomically and reports which source nodes are left serving no
    * slots. Under a SINGLE write-lock hold: provisions each destination node's pool
    * ({@link #setupNodeIfNotExist}) and reassigns the entry's slots, then scans residual ownership
-   * for every distinct source. The single hold is a correctness requirement — applying and
-   * scanning in separate acquisitions leaves an interleaving window against
-   * {@link #renewClusterSlots}. Holds no event state; dedup of the broadcast is the caller's job.
+   * for every distinct source. The single hold is a correctness requirement — applying and scanning
+   * in separate acquisitions leaves an interleaving window against {@link #renewClusterSlots}. Only
+   * ever called under {@link #rediscoverLock} (see {@link #drainMigrationDeltas}).
    * @return the source nodes that no longer own any slot (candidates for connection retirement);
    *         their pools stay in place — removal belongs to the full-refresh dead-pool cleanup
    */
-  Set<HostAndPort> applyMigrationDelta(List<SlotMigration> migrations) {
+  private Set<HostAndPort> applySlotMigration(List<SlotMigration> migrations) {
     w.lock();
     try {
       for (SlotMigration migration : migrations) {

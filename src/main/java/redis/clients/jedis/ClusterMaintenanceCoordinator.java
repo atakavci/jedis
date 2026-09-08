@@ -1,9 +1,6 @@
 package redis.clients.jedis;
 
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -17,12 +14,12 @@ import redis.clients.jedis.TimeoutSource.TimeoutInfo;
  * N-connection broadcast into one client-wide operation and (b) drives the shared relax gate:
  * timeouts stay relaxed while ANY operation is open, so overlapping migrations unrelax only when
  * the last one closes, and a connection created mid-event relaxes from the moment its overlay is
- * installed. On SMIGRATED it applies the slot delta atomically through
- * {@link JedisClusterInfoCache#applyMigrationDelta} — queued and drained after completion when a
- * full topology refresh is in flight, never blocking a read thread — and retires the connections of
- * nodes left without slots via each pool's own {@link MaintenanceEventController}, resolved at
- * event time (no node map here). The pools remain their controllers' sole owners; this class only
- * calls.
+ * installed. On SMIGRATED it hands the slot delta to
+ * {@link JedisClusterInfoCache#applyMigrationDelta}, which queues and applies it atomically
+ * against the refresh lifecycle (never blocking a read thread), then — once the delta is really
+ * applied — retires the connections of nodes left without slots via each pool's own
+ * {@link MaintenanceEventController}, resolved at reaction time (no node map here). The pools
+ * remain their controllers' sole owners; this class only calls.
  */
 final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
 
@@ -36,9 +33,6 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
   /** Seq-keyed operations: open entries gate the relax; closed entries absorb late duplicates. */
   private final ConcurrentHashMap<Object, MigrationOperation> operations = new ConcurrentHashMap<>();
 
-  /** SMIGRATED deltas received while a full refresh was in flight; drained post-refresh. */
-  private final ConcurrentLinkedQueue<SMigratedEvent> pendingDeltas = new ConcurrentLinkedQueue<>();
-
   ClusterMaintenanceCoordinator(JedisClusterInfoCache cache,
       MaintenanceNotificationsConfig config) {
     this.cache = cache;
@@ -46,7 +40,6 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
     TimeoutInfo relaxedTimeoutInfo = new TimeoutInfo(config.getRelaxedTimeout(),
         config.getRelaxedBlockingTimeout());
     this.timeoutSupplier = () -> hasActiveMigration() ? relaxedTimeoutInfo : null;
-    cache.setPostRefreshHook(this::drainPendingDeltas);
   }
 
   /** The client-wide relax gate consulted by every cluster connection's timeout overlay. */
@@ -100,17 +93,9 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
       return;
     }
     logger.debug("Slot migration done (seq={}, entries={})", e.seq, e.migrations.size());
-    if (cache.isRenewInFlight()) {
-      // Never block the read thread on a running full refresh; apply after it completes. If the
-      // refresh finished between the check and the enqueue, drain immediately — poll() makes a
-      // double drain harmless.
-      pendingDeltas.add(e);
-      if (!cache.isRenewInFlight()) {
-        drainPendingDeltas();
-      }
-      return;
-    }
-    applyDelta(e);
+    // the cache queues and applies atomically against its refresh lifecycle; the reaction fires
+    // once the delta is really applied, possibly on a later drainer's thread
+    cache.applyMigrationDelta(e.migrations);
   }
 
   /**
@@ -129,37 +114,6 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
           logger.debug("Discarding stale migration window (seq={}) on closing seq={}", op.seq,
             closingSeq);
         }
-      }
-    }
-  }
-
-  private void drainPendingDeltas() {
-    SMigratedEvent e;
-    while ((e = pendingDeltas.poll()) != null) {
-      applyDelta(e);
-    }
-  }
-
-  /**
-   * Applies the delta and retires the connections of nodes left without slots (Case 2). A node
-   * still owning slots after the delta keeps its connections untouched (Case 1). Retirement goes
-   * through the node pool's own controller, resolved now — a pool destroyed by a racing refresh
-   * simply no longer resolves.
-   */
-  private void applyDelta(SMigratedEvent e) {
-    Set<HostAndPort> slotless = cache.applyMigrationDelta(e.migrations);
-    if (slotless.isEmpty()) {
-      return;
-    }
-    long now = NanoClock.INSTANCE.getAsLong();
-    Map<String, ConnectionPool> nodes = cache.getNodes();
-    for (HostAndPort node : slotless) {
-      ConnectionPool pool = nodes.get(JedisClusterInfoCache.getNodeKey(node));
-      MaintenanceEventController controller = pool == null ? null : pool.getMaintenanceController();
-      if (controller != null) {
-        logger.debug("Node {} owns no slots after migration (seq={}); retiring its connections",
-          node, e.seq);
-        controller.retireAll(now);
       }
     }
   }
