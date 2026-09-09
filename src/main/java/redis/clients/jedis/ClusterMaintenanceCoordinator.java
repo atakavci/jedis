@@ -15,8 +15,8 @@ import redis.clients.jedis.TimeoutSource.TimeoutInfo;
  * timeouts stay relaxed while ANY operation is open, so overlapping migrations unrelax only when
  * the last one closes, and a connection created mid-event relaxes from the moment its overlay is
  * installed. On the first SMIGRATED delivery it hands the slot delta to
- * {@link JedisClusterInfoCache#applySlotMigration}, which queues and applies it atomically
- * against the refresh lifecycle — never blocking or spinning a read thread on a running refresh.
+ * {@link JedisClusterInfoCache#applySlotMigration}, which queues and applies it atomically against
+ * the refresh lifecycle — never blocking or spinning a read thread on a running refresh.
  */
 final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
 
