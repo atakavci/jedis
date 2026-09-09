@@ -1566,8 +1566,8 @@ public abstract class SearchWithParamsCommandsTestBase extends UnifiedJedisComma
    * that runs the query: the error is only returned when the callback wins, so a query that only
    * slightly overruns its timeout may still return full results (intended server behavior). The
    * query runtime must therefore exceed the 1ms per-query timeout by a wide margin — outcomes were
-   * measured flaky below ~10x, while 100k documents keep the margin around ~200x.
-   * Relevant tests are filtered for earlier Redis versions( <8.10.0) with the message "search-on-timeout policy".
+   * measured flaky below ~10x, while 100k documents keep the margin around ~200x. Relevant tests
+   * are filtered for earlier Redis versions( <8.10.0) with the message "search-on-timeout policy".
    */
   private static final int ON_TIMEOUT_DOC_COUNT = 100_000;
 
