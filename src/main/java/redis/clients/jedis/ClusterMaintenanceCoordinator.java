@@ -18,7 +18,7 @@ import redis.clients.jedis.TimeoutSource.TimeoutInfo;
  * {@link JedisClusterInfoCache#applySlotMigration}, which queues and applies it atomically against
  * the refresh lifecycle — never blocking or spinning a read thread on a running refresh.
  */
-final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
+final class ClusterMaintenanceCoordinator {
 
   private static final Logger logger = LoggerFactory.getLogger(ClusterMaintenanceCoordinator.class);
 
@@ -33,13 +33,24 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
    */
   private final ConcurrentHashMap<Object, MigrationOperation> operations = new ConcurrentHashMap<>();
 
+  private final MaintenanceNotificationsConfig config;
+
   ClusterMaintenanceCoordinator(JedisClusterInfoCache cache,
       MaintenanceNotificationsConfig config) {
     this.cache = cache;
+    this.config = config;
     this.maxRelaxedDurationNanos = config.getRelaxedWindowMaxDuration().toNanos();
     TimeoutInfo relaxedTimeoutInfo = new TimeoutInfo(config.getRelaxedTimeout(),
         config.getRelaxedBlockingTimeout());
     this.timeoutSupplier = () -> hasActiveMigration() ? relaxedTimeoutInfo : null;
+  }
+
+  /**
+   * The config this coordinator was built from; drives the cluster connections' MAINT_NOTIFICATIONS
+   * handshake.
+   */
+  MaintenanceNotificationsConfig getConfig() {
+    return config;
   }
 
   /** The client-wide relax gate consulted by every cluster connection's timeout overlay. */
@@ -64,8 +75,8 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
     return false;
   }
 
-  @Override
-  public void onSMigrating(SMigratingEvent e, Connection c) {
+  /** Dispatched by each pool's {@link ClusterMaintenanceController} on the read thread. */
+  void onSMigrating(SMigratingEvent e, Connection c) {
     if (logger.isDebugEnabled()) {
       logger.debug("Slot migration starting: {} (seq={}) conn={}", e.slots, e.seq,
         c.toIdentityString());
@@ -75,8 +86,8 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
     c.applyCurrentTimeout(); // the gate just opened; push the relax to the receiving socket now
   }
 
-  @Override
-  public void onSMigrated(SMigratedEvent e, Connection c) {
+  /** Dispatched by each pool's {@link ClusterMaintenanceController} on the read thread. */
+  void onSMigrated(SMigratedEvent e, Connection c) {
     long deadline = NanoClock.INSTANCE.getAsLong() + maxRelaxedDurationNanos;
     boolean[] firstDelivery = { false };
     operations.compute(e.identity(), (k, cur) -> { // atomic per identity
@@ -139,33 +150,4 @@ final class ClusterMaintenanceCoordinator implements MaintenanceEventListener {
     }
   }
 
-  @Override
-  public void onMoving(MovingEvent e, Connection c) {
-    logger.warn("Standalone maintenance events are not supported by this controller: {} conn={}", e,
-      c);
-  }
-
-  @Override
-  public void onMigrating(MigratingEvent e, Connection c) {
-    logger.warn("Standalone maintenance events are not supported by this controller: {} conn={}", e,
-      c);
-  }
-
-  @Override
-  public void onMigrated(MigratedEvent e, Connection c) {
-    logger.warn("Standalone maintenance events are not supported by this controller: {} conn={}", e,
-      c);
-  }
-
-  @Override
-  public void onFailingOver(FailingOverEvent e, Connection c) {
-    logger.warn("Standalone maintenance events are not supported by this controller: {} conn={}", e,
-      c);
-  }
-
-  @Override
-  public void onFailedOver(FailedOverEvent e, Connection c) {
-    logger.warn("Standalone maintenance events are not supported by this controller: {} conn={}", e,
-      c);
-  }
 }
