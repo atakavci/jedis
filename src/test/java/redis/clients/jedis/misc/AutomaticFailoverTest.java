@@ -23,8 +23,6 @@ import redis.clients.jedis.exceptions.JedisAccessControlException;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.mcf.DatabaseSwitchEvent;
 import redis.clients.jedis.mcf.MultiDbConnectionProvider;
-import redis.clients.jedis.mcf.MultiDbConnectionProviderHelper;
-import redis.clients.jedis.mcf.SwitchReason;
 import redis.clients.jedis.util.EnvCondition;
 import redis.clients.jedis.util.IOUtils;
 import redis.clients.jedis.util.TestEnvUtil;
@@ -91,8 +89,7 @@ public class AutomaticFailoverTest {
       AbstractPipeline pipe = client.pipelined();
       pipe.set("pstr", "foobar");
       pipe.hset("phash", "foo", "bar");
-      MultiDbConnectionProviderHelper.switchToHealthyDatabase(provider,
-        SwitchReason.HEALTH_CHECK, provider.getDatabase());
+      provider.setActiveDatabase(workingEndpoint.getHostAndPort());
       pipe.sync();
     }
 
@@ -111,8 +108,7 @@ public class AutomaticFailoverTest {
       AbstractTransaction tx = client.multi();
       tx.set("tstr", "foobar");
       tx.hset("thash", "foo", "bar");
-      MultiDbConnectionProviderHelper.switchToHealthyDatabase(provider,
-        SwitchReason.HEALTH_CHECK, provider.getDatabase());
+      provider.setActiveDatabase(workingEndpoint.getHostAndPort());
       assertEquals(Arrays.asList("OK", 1L), tx.exec());
     }
 

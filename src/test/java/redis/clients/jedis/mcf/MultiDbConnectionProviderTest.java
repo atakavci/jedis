@@ -109,8 +109,8 @@ public class MultiDbConnectionProviderTest {
     waitForDatabaseToGetHealthy(provider.getDatabase(endpointStandalone0.getHostAndPort()),
       provider.getDatabase(endpointStandalone1.getHostAndPort()));
 
-    Endpoint e2 = MultiDbConnectionProviderHelper.switchToHealthyDatabase(provider,
-      SwitchReason.HEALTH_CHECK, provider.getDatabase());
+    Endpoint e2 = provider.switchToHealthyDatabase(SwitchReason.HEALTH_CHECK,
+      provider.getDatabase()).newEndpoint;
     assertEquals(endpointStandalone1.getHostAndPort(), e2);
   }
 
@@ -138,8 +138,7 @@ public class MultiDbConnectionProviderTest {
         oldPoolClosedAtEvent.set(initialPool.isClosed());
       });
 
-      MultiDbConnectionProviderHelper.switchToHealthyDatabase(localProvider,
-        SwitchReason.HEALTH_CHECK, initial);
+      localProvider.setActiveDatabase(endpointStandalone1.getHostAndPort());
 
       // The pool is retired with the swap, but the listener marks the switch itself: connections
       // handed out before it are force-closed only after the listener returns
@@ -307,8 +306,7 @@ public class MultiDbConnectionProviderTest {
 
     provider.setActiveDatabase(endpoint0);
     provider.getDatabase().setDisabled(true);
-    MultiDbConnectionProviderHelper.switchToHealthyDatabase(provider, SwitchReason.HEALTH_CHECK,
-      provider.getDatabase(endpoint0));
+    provider.switchToHealthyDatabase(SwitchReason.HEALTH_CHECK, provider.getDatabase(endpoint0));
 
     assertFalse(provider.canIterateFrom(provider.getDatabase()));
   }
